@@ -7,9 +7,7 @@ using Sophon.Contracts;
 namespace Sophon.Core.Flow.V2
 {
     /// <summary>
-    /// 工站用的 v2 宿主：把 ISA-88 单元（工站）接到配方阶段（FlowGraph 节点）。
-    /// Pause 挂在节点边界，Stop 走取消令牌；每次 Start 重新读盘，编辑器保存后立刻生效。
-    /// 不再回退 v1 线性 IFlowStep。
+    /// 工站用的 v2 宿主。Pause 跨圈保留：读盘间隙点暂停，下一圈引擎仍会挂起。
     /// </summary>
     public sealed class FlowEngineV2Host : IFlowEngine, IFlowController
     {
@@ -20,6 +18,7 @@ namespace Sophon.Core.Flow.V2
         private readonly string? _graphDirectory;
         private readonly object _lock = new object();
         private FlowEngineV2? _active;
+        private bool _pauseRequested;
         private int _running;
 
         public FlowEngineV2Host(
@@ -46,7 +45,7 @@ namespace Sophon.Core.Flow.V2
             {
                 lock (_lock)
                 {
-                    return _active?.IsPaused == true;
+                    return _pauseRequested || _active?.IsPaused == true;
                 }
             }
         }
@@ -77,7 +76,16 @@ namespace Sophon.Core.Flow.V2
             var engine = new FlowEngineV2(_motion, _io, _eventBus, _services);
             lock (_lock)
             {
+                if (_active != null)
+                {
+                    throw new InvalidOperationException(
+                        $"流程图「{FlowName}」上一轮尚未结束，拒绝重叠执行。");
+                }
                 _active = engine;
+                if (_pauseRequested)
+                {
+                    engine.PauseAsync();
+                }
             }
             Interlocked.Exchange(ref _running, 1);
 
@@ -104,6 +112,7 @@ namespace Sophon.Core.Flow.V2
             FlowEngineV2? engine;
             lock (_lock)
             {
+                _pauseRequested = true;
                 engine = _active;
             }
             engine?.PauseAsync();
@@ -114,6 +123,7 @@ namespace Sophon.Core.Flow.V2
             FlowEngineV2? engine;
             lock (_lock)
             {
+                _pauseRequested = false;
                 engine = _active;
             }
             engine?.ResumeAsync();
@@ -124,6 +134,7 @@ namespace Sophon.Core.Flow.V2
             FlowEngineV2? engine;
             lock (_lock)
             {
+                _pauseRequested = false;
                 engine = _active;
             }
             engine?.StopAsync();

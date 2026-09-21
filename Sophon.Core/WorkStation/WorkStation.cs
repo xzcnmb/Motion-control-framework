@@ -8,8 +8,8 @@ namespace Sophon.Core
 {
     /// <summary>
     /// 工站（ISA-88 Unit / PackML 设备）：绑定一张配方图，Start 进入 Execute 循环，直到 Stop。
-    /// 暂停挂在节点/步骤边界；停止 = 工站 CTS + 运动 Cat1 受控停；异常进 Alarm，不继续下一圈。
-    /// 急停必须硬接线，不得依赖本类。
+    /// 暂停挂在节点/步骤边界，不停轴；停止 = 工站 CTS + 运动 Cat1 受控停；异常进 Alarm。
+    /// 同一时刻只允许一个 Execute 任务。急停必须硬接线。
     /// </summary>
     public class WorkStation : IWorkStation
     {
@@ -52,6 +52,8 @@ namespace Sophon.Core
         private readonly IFlowContext _flowContext;
         private readonly IStateMachine _stateMachine;
         private CancellationTokenSource? _cts;
+        private Task? _runTask;
+        private int _generation;
         private readonly object _lock = new object();
 
         public void BindRecipe(string flowName)
@@ -70,9 +72,16 @@ namespace Sophon.Core
                         $"工站「{WorkStationName}」处于 {s}，不能更换配方。PackML 只允许在空闲/停止时换配方。");
                 }
 
+                if (_runTask != null && !_runTask.IsCompleted)
+                {
+                    throw new InvalidOperationException(
+                        $"工站「{WorkStationName}」上一轮尚未退出，不能更换配方。");
+                }
+
                 BoundFlowName = flowName.Trim();
                 _flowEngine = _flowEngineFactory.CreateFlowEngine(BoundFlowName);
                 _flowController = _flowEngine as IFlowController;
+                _flowContext.ClearData();
                 _flowContext.Logger.Info($"工站{WorkStationName} 绑定配方「{BoundFlowName}」");
             }
         }
@@ -100,17 +109,24 @@ namespace Sophon.Core
                         $"工站「{WorkStationName}」处于报警，必须先复位再启动。");
                 }
 
+                if (_runTask != null && !_runTask.IsCompleted)
+                {
+                    _flowContext.Logger.Warn($"工站{WorkStationName}上一轮循环尚未退出，拒绝启动（PackML 同一时刻只允许一个 Execute）");
+                    return;
+                }
+
                 _cts?.Dispose();
                 _cts = new CancellationTokenSource();
                 CycleCount = 0;
-                _stateMachine.SetState(WorkStationState.Running);
+                int generation = ++_generation;
+                var cts = _cts;
+                _runTask = Task.Run(() => RunWorkAsync(cts, generation));
             }
 
-            var cts = _cts;
-            _ = Task.Run(async () => await RunWorkAsync(cts!).ConfigureAwait(false));
+            ApplyState(WorkStationState.Running);
         }
 
-        private async Task RunWorkAsync(CancellationTokenSource cts)
+        private async Task RunWorkAsync(CancellationTokenSource cts, int generation)
         {
             try
             {
@@ -137,7 +153,15 @@ namespace Sophon.Core
                         CycleCount++;
                         n = CycleCount;
                     }
-                    CycleCompleted?.Invoke(n);
+
+                    try
+                    {
+                        CycleCompleted?.Invoke(n);
+                    }
+                    catch (Exception ex)
+                    {
+                        _flowContext.Logger.Warn($"工站{WorkStationName}圈数回调异常：{ex.Message}");
+                    }
 
                     if (!LoopRecipe)
                     {
@@ -145,28 +169,62 @@ namespace Sophon.Core
                     }
                 }
 
+                bool goIdle = false;
                 lock (_lock)
                 {
+                    if (generation != _generation)
+                    {
+                        return;
+                    }
                     var s = _stateMachine.CurrentState;
                     if (s == WorkStationState.Running || s == WorkStationState.Paused)
                     {
-                        _stateMachine.SetState(WorkStationState.Idle);
+                        goIdle = true;
                     }
+                }
+                if (goIdle)
+                {
+                    ApplyState(WorkStationState.Idle);
                 }
             }
             catch (OperationCanceledException)
             {
                 _flowContext.Logger.Info($"工站{WorkStationName}流程被取消");
+                bool goStopped = false;
+                lock (_lock)
+                {
+                    if (generation != _generation)
+                    {
+                        return;
+                    }
+                    if (_stateMachine.CurrentState == WorkStationState.Running)
+                    {
+                        goStopped = true;
+                    }
+                }
+                if (goStopped)
+                {
+                    ApplyState(WorkStationState.Stopped);
+                }
             }
             catch (Exception e)
             {
                 _flowContext.Logger.Error($"工站{WorkStationName}运行异常：{e.Message}");
+                bool goAlarm = false;
                 lock (_lock)
                 {
+                    if (generation != _generation)
+                    {
+                        return;
+                    }
                     if (_stateMachine.CurrentState != WorkStationState.Stopped)
                     {
-                        _stateMachine.SetState(WorkStationState.Alarm, e.Message);
+                        goAlarm = true;
                     }
+                }
+                if (goAlarm)
+                {
+                    ApplyState(WorkStationState.Alarm, e.Message);
                 }
             }
         }
@@ -180,9 +238,8 @@ namespace Sophon.Core
                     return;
                 }
                 _flowController?.Pause();
-                HaltAxes();
-                _stateMachine.SetState(WorkStationState.Paused);
             }
+            ApplyState(WorkStationState.Paused);
         }
 
         public void Resume()
@@ -194,12 +251,13 @@ namespace Sophon.Core
                     return;
                 }
                 _flowController?.Resume();
-                _stateMachine.SetState(WorkStationState.Running);
             }
+            ApplyState(WorkStationState.Running);
         }
 
         public void Stop()
         {
+            bool stopped = false;
             lock (_lock)
             {
                 _flowController?.Stop();
@@ -207,8 +265,12 @@ namespace Sophon.Core
                 {
                     _cts?.Cancel();
                     StopAxesControlled();
-                    _stateMachine.SetState(WorkStationState.Stopped);
+                    stopped = true;
                 }
+            }
+            if (stopped)
+            {
+                ApplyState(WorkStationState.Stopped);
             }
         }
 
@@ -216,35 +278,20 @@ namespace Sophon.Core
         {
             lock (_lock)
             {
-                if (_stateMachine.CurrentState == WorkStationState.Alarm)
+                if (_stateMachine.CurrentState != WorkStationState.Alarm)
                 {
-                    _stateMachine.Reset();
+                    return;
                 }
             }
+            _stateMachine.Reset();
         }
 
-        private void HaltAxes()
+        private void ApplyState(WorkStationState state, string? alarmSource = null)
         {
-            var motion = _motion;
-            if (motion == null)
-            {
-                return;
-            }
-
-            try
-            {
-                foreach (var axis in motion.Axes)
-                {
-                    motion.Halt(axis.AxisId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _flowContext.Logger.Warn($"工站{WorkStationName}暂停停轴失败：{ex.Message}");
-            }
+            _stateMachine.SetState(state, alarmSource);
         }
 
-        /// <summary>PackML Stop = Cat1 受控停。急停不走这里。</summary>
+        /// <summary>PackML Stop = Cat1 受控停。急停不走这里。暂停只挂节点边界，不停轴。</summary>
         private void StopAxesControlled()
         {
             var motion = _motion;

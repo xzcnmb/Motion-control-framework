@@ -201,5 +201,53 @@ namespace Sophon.Core.Tests
             Assert.False(motion.AbortAllCalled);
             gate.Set();
         }
+
+        [Fact]
+        public async Task 停止后立刻启动_上一轮未退出则拒绝叠任务()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var station = CreateStation(out _, new IgnoreCancelUntilGate(gate, entered));
+
+            station.Start();
+            Assert.True(entered.Wait(2000));
+            station.Stop();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+            station.Start();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+
+            gate.Set();
+            Assert.True(await TestHelper.WaitUntilAsync(() =>
+            {
+                station.Start();
+                return station.CurrentState == WorkStationState.Running;
+            }));
+            station.Stop();
+        }
+
+        private sealed class IgnoreCancelUntilGate : IFlowStep
+        {
+            private readonly ManualResetEventSlim _gate;
+            private readonly ManualResetEventSlim _entered;
+
+            public IgnoreCancelUntilGate(ManualResetEventSlim gate, ManualResetEventSlim entered)
+            {
+                _gate = gate;
+                _entered = entered;
+            }
+
+            public string StepName => "IgnoreCancel";
+
+            public Task<StepResult> AsyncExecuteStep(IFlowContext context, CancellationToken token)
+            {
+                _entered.Set();
+                return Task.Run(() =>
+                {
+                    _gate.Wait();
+                    context.NextStepIndex++;
+                    return StepResult.Success();
+                });
+            }
+        }
     }
 }

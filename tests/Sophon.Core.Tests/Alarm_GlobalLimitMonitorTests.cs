@@ -120,6 +120,39 @@ namespace Sophon.Core.Tests
         }
 
         [Fact]
+        public void 硬限位复位_读DI失败必须拒绝不能放行()
+        {
+            var axisDef = new AxisDefinition
+            {
+                AxisId = 0,
+                Name = "X轴",
+                HardLimitEnabled = true,
+                LimitPositiveIoName = "DI_LIMIT_X_POS"
+            };
+            var fakeMotion = new FakeMotionControllerForAlarmTeach(axisDef);
+            using var axisMgr = new AxisManager(fakeMotion, refreshIntervalMs: 10000);
+            var center = new AlarmCenter(historyFilePath: _tempFile);
+            var throwingIo = new ThrowingIoController();
+            using var monitor = new GlobalLimitMonitor(axisMgr, center, new[] { axisDef }, ioController: throwingIo);
+
+            monitor.OnGlobalLimitAlarm(new GlobalLimitAlarmArgs(0, "DI_LIMIT_X_POS", IsPositiveDirection: true, IsHardLimit: true));
+            Assert.False(monitor.TryResetLimit(0));
+            Assert.Single(center.ActiveAlarms);
+            Assert.True(monitor.IsDirectionProhibited(0, +1));
+        }
+
+        private sealed class ThrowingIoController : IIoController
+        {
+            public bool ReadDi(string pointName) => throw new InvalidOperationException("io down");
+            public void WriteDo(string pointName, bool value) { }
+            public IReadOnlyDictionary<string, bool> SnapshotDi() => throw new InvalidOperationException("io down");
+            public IReadOnlyDictionary<string, bool> SnapshotDo() => new Dictionary<string, bool>();
+            public event Action<string, bool>? DiChanged { add { } remove { } }
+            public IReadOnlyList<string> DiPointNames => Array.Empty<string>();
+            public IReadOnlyList<string> DoPointNames => Array.Empty<string>();
+        }
+
+        [Fact]
         public void 看门狗超时_快照停止更新超过阈值触发报警()
         {
             var axisDef = new AxisDefinition { AxisId = 0 };

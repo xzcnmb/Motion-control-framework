@@ -57,6 +57,14 @@ namespace Sophon.Core
             }
         }
 
+        public void ClearData()
+        {
+            lock (_dataLock)
+            {
+                _data.Clear();
+            }
+        }
+
         /// <summary>
         /// data为浅拷贝，数据公用（与父上下文共享同一字典及其锁），其余字段不共用。
         /// </summary>

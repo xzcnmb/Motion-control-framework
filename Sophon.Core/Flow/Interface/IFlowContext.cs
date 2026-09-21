@@ -34,6 +34,9 @@ namespace Sophon.Core
 
         void SetData<T>(string key, T value);
 
+        /// <summary>换配方时清掉上一张图留下的变量，避免视觉坐标串到新配方。</summary>
+        void ClearData();
+
         IFlowContext Clone();
     }
 }

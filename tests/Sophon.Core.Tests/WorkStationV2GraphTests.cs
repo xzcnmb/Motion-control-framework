@@ -56,6 +56,24 @@ namespace Sophon.Core.Tests
         }
 
         [Fact]
+        public async Task 启动后立刻暂停_配方必须挂住不能空跑完()
+        {
+            const string name = "即停工站";
+            SaveLinear(name, 80, 80, 80);
+            var station = CreateStation(name, loop: false);
+
+            station.Start();
+            station.Pause();
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            await Task.Delay(250);
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            Assert.Equal(0, station.CycleCount);
+            station.Resume();
+            Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Idle, timeoutMs: 5000));
+            Assert.Equal(1, station.CycleCount);
+        }
+
+        [Fact]
         public async Task 工站暂停恢复_v2节点边界挂起后能继续完成()
         {
             const string name = "暂停工站";

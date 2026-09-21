@@ -214,7 +214,7 @@ namespace Sophon.UI.ViewModels
             }
             else
             {
-                dispatcher.Invoke(action);
+                dispatcher.BeginInvoke(action);
             }
         }
 

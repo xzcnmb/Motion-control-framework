@@ -27,6 +27,7 @@ namespace Sophon.Core.Alarm
         private readonly IIoController? _ioController;
         private readonly IWorkStation? _workStation;
         private readonly IStateMachine? _stateMachine;
+        private readonly IWorkStationManager? _workStationManager;
         private readonly IReadOnlyList<AxisDefinition> _axisDefinitions;
         private readonly List<string> _failSafeDoResetList = new();
 
@@ -79,6 +80,7 @@ namespace Sophon.Core.Alarm
             IIoController? ioController = null,
             IWorkStation? workStation = null,
             IStateMachine? stateMachine = null,
+            IWorkStationManager? workStationManager = null,
             int intervalMs = 20,
             TimeSpan? watchdogTimeout = null,
             IEnumerable<string>? failSafeDoResetList = null)
@@ -88,6 +90,7 @@ namespace Sophon.Core.Alarm
             _ioController = ioController;
             _workStation = workStation;
             _stateMachine = stateMachine;
+            _workStationManager = workStationManager;
             _intervalMs = intervalMs > 0 ? intervalMs : 20;
             _watchdogTimeout = watchdogTimeout ?? TimeSpan.FromSeconds(1.0);
 
@@ -305,7 +308,6 @@ namespace Sophon.Core.Alarm
                 return false;
             }
 
-            // 若有 IO 控制器与限位点名，核查电平是否已离开（通常限位触发为 true，离开为 false）
             if (_ioController != null && !string.IsNullOrEmpty(record.ActiveLimitPoint))
             {
                 try
@@ -313,31 +315,27 @@ namespace Sophon.Core.Alarm
                     bool currentLevel = _ioController.ReadDi(record.ActiveLimitPoint);
                     if (currentLevel)
                     {
-                        // 依然处于限位电平上，拒绝复位
                         return false;
                     }
                 }
-                catch { }
+                catch
+                {
+                    return false;
+                }
+            }
+            else if (record.HardLimitTriggered)
+            {
+                return false;
             }
 
-            // 清除记录状态
             record.HardLimitTriggered = false;
             record.SoftLimitTriggered = false;
             record.MotionInForbiddenDirectionProhibited = false;
             record.ActiveLimitPoint = null;
 
-            // 仅清除该轴自身的报警实例，不影响其他轴
             _alarmCenter.Clear(AxisCode("HARD_LIMIT_ESTOP", axisId));
             _alarmCenter.Clear(AxisCode("HARD_LIMIT_STOP", axisId));
             _alarmCenter.Clear(AxisCode("SOFT_LIMIT_ERROR", axisId));
-
-            // 复位工站状态机
-            try
-            {
-                _stateMachine?.Reset();
-                _workStation?.Reset();
-            }
-            catch { }
 
             return true;
         }

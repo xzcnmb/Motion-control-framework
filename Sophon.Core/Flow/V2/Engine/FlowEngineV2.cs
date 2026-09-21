@@ -233,7 +233,6 @@ namespace Sophon.Core.Flow.V2
             CurrentGraph = graph;
             CurrentContext = context;
             IsRunning = true;
-            _isPaused = false;
             _isBreakpointHit = false;
             _nodeExecutionCounts.Clear();
             _nodeStates.Clear();

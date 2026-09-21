@@ -12,7 +12,7 @@ using Sophon.Core.Flow.V2;
 namespace Sophon.Core
 {
     /// <summary>
-    /// 工站档案：SophonData/workstations.json。工站与流程图是绑定关系，不是同名一对一。
+    /// 工站档案：SophonData/workstations.json。损坏文件另存 .bad，禁止静默覆盖绑定。
     /// </summary>
     [InjectableAttribute(DependencyLifetime.Singleton)]
     public sealed class WorkStationProfileStore
@@ -49,21 +49,7 @@ namespace Sophon.Core
         {
             lock (_lock)
             {
-                if (!File.Exists(_filePath))
-                {
-                    return new List<WorkStationProfile>();
-                }
-
-                try
-                {
-                    string json = File.ReadAllText(_filePath, Utf8NoBom);
-                    var file = JsonSerializer.Deserialize<WorkStationProfileFile>(json, JsonOptions);
-                    return file?.Stations ?? new List<WorkStationProfile>();
-                }
-                catch (JsonException)
-                {
-                    return new List<WorkStationProfile>();
-                }
+                return LoadUnlocked();
             }
         }
 
@@ -72,44 +58,45 @@ namespace Sophon.Core
             if (stations == null) throw new ArgumentNullException(nameof(stations));
             lock (_lock)
             {
-                string? dir = Path.GetDirectoryName(_filePath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                var file = new WorkStationProfileFile { Stations = stations.ToList() };
-                File.WriteAllText(_filePath, JsonSerializer.Serialize(file, JsonOptions), Utf8NoBom);
+                SaveUnlocked(stations);
             }
         }
 
         /// <summary>
-        /// 没有档案时，用已保存的流程图各建一个同名工站（首次迁移）。之后工站与流程独立。
+        /// 没有档案时，用已保存的流程图各建一个同名工站（首次迁移）。解析失败不覆盖原文件。
         /// </summary>
         public List<WorkStationProfile> LoadOrMigrateFromFlows()
         {
-            var list = Load();
-            if (list.Count > 0)
+            lock (_lock)
             {
+                var list = LoadUnlocked();
+                if (list.Count > 0)
+                {
+                    return list;
+                }
+
+                if (File.Exists(_filePath))
+                {
+                    return list;
+                }
+
+                foreach (var flow in FlowGraphStore.ListFlowNames())
+                {
+                    list.Add(new WorkStationProfile
+                    {
+                        StationName = flow,
+                        BoundFlowName = flow,
+                        LoopRecipe = true
+                    });
+                }
+
+                if (list.Count > 0)
+                {
+                    SaveUnlocked(list);
+                }
+
                 return list;
             }
-
-            foreach (var flow in FlowGraphStore.ListFlowNames())
-            {
-                list.Add(new WorkStationProfile
-                {
-                    StationName = flow,
-                    BoundFlowName = flow,
-                    LoopRecipe = true
-                });
-            }
-
-            if (list.Count > 0)
-            {
-                Save(list);
-            }
-
-            return list;
         }
 
         public void Upsert(WorkStationProfile profile)
@@ -120,17 +107,60 @@ namespace Sophon.Core
                 throw new ArgumentException("工站名不能为空", nameof(profile));
             }
 
-            var list = Load();
-            int idx = list.FindIndex(p => string.Equals(p.StationName, profile.StationName, StringComparison.Ordinal));
-            if (idx >= 0)
+            lock (_lock)
             {
-                list[idx] = profile;
+                var list = LoadUnlocked();
+                int idx = list.FindIndex(p => string.Equals(p.StationName, profile.StationName, StringComparison.Ordinal));
+                if (idx >= 0)
+                {
+                    list[idx] = profile;
+                }
+                else
+                {
+                    list.Add(profile);
+                }
+                SaveUnlocked(list);
             }
-            else
+        }
+
+        private List<WorkStationProfile> LoadUnlocked()
+        {
+            if (!File.Exists(_filePath))
             {
-                list.Add(profile);
+                return new List<WorkStationProfile>();
             }
-            Save(list);
+
+            try
+            {
+                string json = File.ReadAllText(_filePath, Utf8NoBom);
+                var file = JsonSerializer.Deserialize<WorkStationProfileFile>(json, JsonOptions);
+                return file?.Stations ?? new List<WorkStationProfile>();
+            }
+            catch (JsonException)
+            {
+                try
+                {
+                    string bad = _filePath + ".bad";
+                    File.Copy(_filePath, bad, overwrite: true);
+                }
+                catch
+                {
+                }
+
+                return new List<WorkStationProfile>();
+            }
+        }
+
+        private void SaveUnlocked(IReadOnlyList<WorkStationProfile> stations)
+        {
+            string? dir = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var file = new WorkStationProfileFile { Stations = stations.ToList() };
+            File.WriteAllText(_filePath, JsonSerializer.Serialize(file, JsonOptions), Utf8NoBom);
         }
     }
 }

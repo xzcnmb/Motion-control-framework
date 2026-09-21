@@ -7,20 +7,23 @@ using Sophon.Core.Flow.V2;
 namespace Sophon.Core
 {
     /// <summary>
-    /// 每次按流程图名新建 v2 宿主，不按工站名缓存（多个工站可绑同一张图，但引擎实例不能共享）。
+    /// 每次按流程图名新建 v2 宿主。必须把 IServiceProvider 传下去，视觉/外设节点才能从容器取依赖。
     /// </summary>
     [InjectableAttribute(DependencyLifetime.Singleton)]
     public class FlowEngineFactory : IFlowEngineFactory
     {
         private readonly IMotionController? _motion;
         private readonly IIoController? _io;
+        private readonly IServiceProvider? _services;
 
         public FlowEngineFactory(
             IMotionController? motionController = null,
-            IIoController? ioController = null)
+            IIoController? ioController = null,
+            IServiceProvider? services = null)
         {
             _motion = motionController;
             _io = ioController;
+            _services = services;
         }
 
         public IFlowEngine CreateFlowEngine(string flowName)
@@ -30,7 +33,7 @@ namespace Sophon.Core
                 throw new ArgumentException("流程名不能为空", nameof(flowName));
             }
 
-            return new FlowEngineV2Host(flowName, _motion, _io, EventBus.GetInstance());
+            return new FlowEngineV2Host(flowName, _motion, _io, EventBus.GetInstance(), _services);
         }
     }
 }
