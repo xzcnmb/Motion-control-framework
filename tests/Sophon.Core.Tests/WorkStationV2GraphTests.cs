@@ -9,7 +9,7 @@ using Xunit;
 namespace Sophon.Core.Tests
 {
     /// <summary>
-    /// 工站必须跑流程编辑器同一套 v2 节点图，不能再走空的 v1 线性步骤。
+    /// 工站跑流程编辑器同一套 v2 节点图；生产默认循环，测试单次模式仍回 Idle。
     /// </summary>
     public class WorkStationV2GraphTests : IDisposable
     {
@@ -36,22 +36,41 @@ namespace Sophon.Core.Tests
         }
 
         [Fact]
-        public async Task 工站启动_执行v2流程图_完成后回到空闲()
+        public async Task 工站启动_单次模式_执行v2图后回到空闲()
         {
             const string name = "搬运工站";
             SaveLinear(name, 20, 20);
-            var station = CreateStation(name);
+            var station = CreateStation(name, loop: false);
 
             station.Start();
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Idle));
+            Assert.Equal(1, station.CycleCount);
         }
 
         [Fact]
         public async Task 没有v2流程图_启动进入报警_不假装跑完()
         {
-            var station = CreateStation("空工站");
+            var station = CreateStation("空工站", loop: false);
             station.Start();
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Alarm));
+        }
+
+        [Fact]
+        public async Task 启动后立刻暂停_配方必须挂住不能空跑完()
+        {
+            const string name = "即停工站";
+            SaveLinear(name, 80, 80, 80);
+            var station = CreateStation(name, loop: false);
+
+            station.Start();
+            station.Pause();
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            await Task.Delay(250);
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            Assert.Equal(0, station.CycleCount);
+            station.Resume();
+            Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Idle, timeoutMs: 5000));
+            Assert.Equal(1, station.CycleCount);
         }
 
         [Fact]
@@ -59,7 +78,7 @@ namespace Sophon.Core.Tests
         {
             const string name = "暂停工站";
             SaveLinear(name, 80, 80);
-            var station = CreateStation(name);
+            var station = CreateStation(name, loop: false);
 
             station.Start();
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Running));
@@ -77,7 +96,7 @@ namespace Sophon.Core.Tests
         {
             const string name = "停止工站";
             SaveLinear(name, 10000);
-            var station = CreateStation(name);
+            var station = CreateStation(name, loop: true);
 
             station.Start();
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Running));
@@ -87,12 +106,63 @@ namespace Sophon.Core.Tests
             Assert.Equal(WorkStationState.Stopped, station.CurrentState);
         }
 
-        private WorkStation CreateStation(string name) =>
+        [Fact]
+        public async Task 工站循环模式_跑完配方继续下一圈_直到停止()
+        {
+            const string flow = "循环配方";
+            SaveLinear(flow, 15);
+            var station = new WorkStation(
+                "循环工站",
+                new V2GraphFlowEngineFactory(_dir),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                WorkStationOptions.Cyclic(flow));
+
+            station.Start();
+            Assert.True(await TestHelper.WaitUntilAsync(() => station.CycleCount >= 2, timeoutMs: 5000));
+            Assert.Equal(WorkStationState.Running, station.CurrentState);
+            station.Stop();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+            Assert.True(station.CycleCount >= 2);
+        }
+
+        [Fact]
+        public async Task 工站绑定另一张流程图_启动跑的是绑定的配方()
+        {
+            SaveLinear("配方A", 10);
+            SaveLinear("配方B", 10);
+            var station = new WorkStation(
+                "装配工站",
+                new V2GraphFlowEngineFactory(_dir),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                new WorkStationOptions { BoundFlowName = "配方A", LoopRecipe = false });
+
+            Assert.Equal("配方A", station.BoundFlowName);
+            station.BindRecipe("配方B");
+            Assert.Equal("配方B", station.BoundFlowName);
+            station.Start();
+            Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Idle));
+            Assert.Equal(1, station.CycleCount);
+        }
+
+        [Fact]
+        public void 运行中禁止换配方()
+        {
+            SaveLinear("配方A", 10000);
+            var station = CreateStation("配方A", loop: true);
+            station.Start();
+            Assert.Throws<InvalidOperationException>(() => station.BindRecipe("别的"));
+            station.Stop();
+        }
+
+        private WorkStation CreateStation(string name, bool loop) =>
             new WorkStation(
                 name,
                 new V2GraphFlowEngineFactory(_dir),
                 new FakeFlowContextFactory(),
-                new StateMachine());
+                new StateMachine(),
+                loop ? WorkStationOptions.Cyclic(name) : WorkStationOptions.SingleShot);
 
         private void SaveLinear(string flowName, params int[] delayMs)
         {

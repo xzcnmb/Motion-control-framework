@@ -7,23 +7,24 @@ using Sophon.Infrastructure.Motion.Axis;
 namespace Sophon.Core.Alarm
 {
     /// <summary>
-    /// 默认运动报警联动处理器。
-    /// StopAxis=按 AxisId 停该轴、StopAllAxes=AbortAll、EStopAll=AbortAll + 置 WorkStation Alarm。
+    /// 运动报警联动。EStopAll / StopFlow 必须走工站管理器停所有工站，不能打到未注册的单工站或幽灵状态机。
+    /// 急停本身仍必须硬接线；这里只停软件循环 + AbortAll。
     /// </summary>
     public class MotionAlarmLinkageHandler : IAlarmLinkageHandler
     {
         private readonly AxisManager? _axisManager;
-        private readonly IWorkStation? _workStation;
-        private readonly IStateMachine? _stateMachine;
+        private readonly IWorkStationManager? _workStationManager;
 
         public MotionAlarmLinkageHandler(
             AxisManager? axisManager = null,
+            IWorkStationManager? workStationManager = null,
             IWorkStation? workStation = null,
             IStateMachine? stateMachine = null)
         {
             _axisManager = axisManager;
-            _workStation = workStation;
-            _stateMachine = stateMachine;
+            _workStationManager = workStationManager;
+            _ = workStation;
+            _ = stateMachine;
         }
 
         public virtual void Handle(AlarmDefinition def, string detail)
@@ -41,7 +42,6 @@ namespace Sophon.Core.Alarm
                     }
                     else
                     {
-                        // 若未解析出单轴，降级安全减速停所有轴
                         _axisManager?.StopAll();
                     }
                     break;
@@ -51,19 +51,12 @@ namespace Sophon.Core.Alarm
                     break;
 
                 case LinkageMode.StopFlow:
-                    _workStation?.Stop();
+                    _workStationManager?.StopAll();
                     break;
 
                 case LinkageMode.EStopAll:
                     _axisManager?.AbortAll();
-                    if (_stateMachine != null)
-                    {
-                        _stateMachine.SetState(WorkStationState.Alarm, $"{def.Code}: {def.Message} [{detail}]");
-                    }
-                    else if (_workStation != null)
-                    {
-                        _workStation.Stop();
-                    }
+                    _workStationManager?.StopAll();
                     break;
             }
         }
@@ -72,7 +65,6 @@ namespace Sophon.Core.Alarm
         {
             if (string.IsNullOrWhiteSpace(detail)) return null;
 
-            // 匹配 "Axis: 0", "AxisId=1", "轴0", "0" 等
             var match = Regex.Match(detail, @"(?:Axis(?:Id)?[:=\s]*|轴\s*)(\d+)", RegexOptions.IgnoreCase);
             if (match.Success && int.TryParse(match.Groups[1].Value, out int id))
             {

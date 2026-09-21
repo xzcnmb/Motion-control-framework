@@ -1,15 +1,16 @@
+using Sophon.Contracts;
 using Sophon.Core;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace Sophon.Core.Tests
 {
     /// <summary>
-    /// 工站生命周期回归测试：覆盖原版全部已知缺陷场景（异常逃逸卡 Running/
-    /// Idle 时 Stop 残留 _isStopped/启启并发/暂停停止/停止后重启）。
-    /// 每个测试实例独立记录器，可安全并行。
+    /// 工站生命周期回归：异常不逃逸、Alarm 须复位、暂停不另开任务、停止发 Cat1 受控停。
     /// </summary>
     public class WorkStationLifecycleTests
     {
@@ -20,7 +21,8 @@ namespace Sophon.Core.Tests
                 "TestStation",
                 new FakeFlowEngineFactory(stepList.ToList()),
                 new FakeFlowContextFactory(),
-                new StateMachine());
+                new StateMachine(),
+                WorkStationOptions.SingleShot);
         }
 
         [Fact]
@@ -50,11 +52,9 @@ namespace Sophon.Core.Tests
 
             station.Start();
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Alarm));
-            // 失败后 B 不应执行；状态必须离开 Running（原版缺陷：永久卡 Running）
             Assert.DoesNotContain("B", recorder.Names);
             Assert.Equal(WorkStationState.Alarm, station.CurrentState);
 
-            // 复位 → 重启可再次执行
             station.Reset();
             Assert.Equal(WorkStationState.Idle, station.CurrentState);
             recorder.Clear();
@@ -75,23 +75,22 @@ namespace Sophon.Core.Tests
 
             station.Start();
             await Task.Delay(10);
-            station.Start(); // 运行中重复启动：应被忽略
+            station.Start();
 
             Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Idle));
-            Assert.Equal(new[] { "A", "B" }, recorder.Names); // 只执行一遍
+            Assert.Equal(new[] { "A", "B" }, recorder.Names);
         }
 
         [Fact]
         public async Task 空闲时停止_随后启动_流程仍完整执行()
         {
-            // 原版缺陷：Idle 态 Stop 使 _isStopped 残留，导致下一次 Start 一步都不执行
             var recorder = new ExecutionRecorder();
             var station = CreateStation(
                 out _,
                 new TestSteps.CountingStep("A", recorder),
                 new TestSteps.CountingStep("B", recorder));
 
-            station.Stop(); // Idle → 无操作
+            station.Stop();
             Assert.Equal(WorkStationState.Idle, station.CurrentState);
 
             station.Start();
@@ -103,8 +102,8 @@ namespace Sophon.Core.Tests
         public async Task 暂停_挂在步骤边界_恢复后继续执行()
         {
             var recorder = new ExecutionRecorder();
-            using var gate = new System.Threading.ManualResetEventSlim(false);
-            using var entered = new System.Threading.ManualResetEventSlim(false);
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
             var station = CreateStation(
                 out _,
                 new TestSteps.GateStep("G", gate, entered),
@@ -112,13 +111,13 @@ namespace Sophon.Core.Tests
                 new TestSteps.CountingStep("B", recorder));
 
             station.Start();
-            Assert.True(entered.Wait(2000));           // 门控步骤已进入
-            station.Pause();                            // 暂停请求
+            Assert.True(entered.Wait(2000));
+            station.Pause();
             Assert.Equal(WorkStationState.Paused, station.CurrentState);
 
-            gate.Set();                                 // 放行门控步骤 → 引擎应在边界挂起
+            gate.Set();
             await Task.Delay(200);
-            Assert.True(recorder.IsEmpty);              // 暂停期间不执行后续步骤
+            Assert.True(recorder.IsEmpty);
 
             station.Resume();
             Assert.Equal(WorkStationState.Running, station.CurrentState);
@@ -130,8 +129,8 @@ namespace Sophon.Core.Tests
         public async Task 暂停中停止_状态为已停止且流程快速退出()
         {
             var recorder = new ExecutionRecorder();
-            using var gate = new System.Threading.ManualResetEventSlim(false);
-            using var entered = new System.Threading.ManualResetEventSlim(false);
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
             var station = CreateStation(
                 out _,
                 new TestSteps.GateStep("G", gate, entered),
@@ -145,7 +144,110 @@ namespace Sophon.Core.Tests
 
             station.Stop();
             Assert.Equal(WorkStationState.Stopped, station.CurrentState);
-            Assert.True(await TestHelper.WaitUntilAsync(() => recorder.IsEmpty)); // A 未执行
+            Assert.True(await TestHelper.WaitUntilAsync(() => recorder.IsEmpty));
+        }
+
+        [Fact]
+        public async Task 报警后不复位不能启动()
+        {
+            var station = CreateStation(out _, new TestSteps.FailStep("A"));
+            station.Start();
+            Assert.True(await TestHelper.WaitUntilAsync(() => station.CurrentState == WorkStationState.Alarm));
+            var ex = Assert.Throws<InvalidOperationException>(() => station.Start());
+            Assert.Contains("复位", ex.Message);
+            station.Reset();
+            Assert.Equal(WorkStationState.Idle, station.CurrentState);
+        }
+
+        [Fact]
+        public async Task 暂停时Start不另开循环任务()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var station = CreateStation(out _, new TestSteps.GateStep("G", gate, entered));
+            station.Start();
+            Assert.True(entered.Wait(2000));
+            station.Pause();
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            station.Start();
+            Assert.Equal(WorkStationState.Paused, station.CurrentState);
+            gate.Set();
+            station.Stop();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+        }
+
+        [Fact]
+        public void 停止对运动发受控停不发急停()
+        {
+            var motion = new FakeMotionControllerForAlarmTeach(
+                new AxisDefinition { AxisId = 0, Name = "X" },
+                new AxisDefinition { AxisId = 1, Name = "Y" });
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var station = new WorkStation(
+                "TestStation",
+                new FakeFlowEngineFactory(new IFlowStep[] { new TestSteps.GateStep("G", gate, entered) }),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                WorkStationOptions.SingleShot,
+                motion);
+
+            station.Start();
+            Assert.True(entered.Wait(2000));
+            station.Stop();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+            Assert.Equal(new[] { 0, 1 }, motion.StoppedAxes.ToArray());
+            Assert.Empty(motion.AbortedAxes);
+            Assert.False(motion.AbortAllCalled);
+            gate.Set();
+        }
+
+        [Fact]
+        public async Task 停止后立刻启动_上一轮未退出则拒绝叠任务()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var station = CreateStation(out _, new IgnoreCancelUntilGate(gate, entered));
+
+            station.Start();
+            Assert.True(entered.Wait(2000));
+            station.Stop();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+            station.Start();
+            Assert.Equal(WorkStationState.Stopped, station.CurrentState);
+
+            gate.Set();
+            Assert.True(await TestHelper.WaitUntilAsync(() =>
+            {
+                station.Start();
+                return station.CurrentState == WorkStationState.Running;
+            }));
+            station.Stop();
+        }
+
+        private sealed class IgnoreCancelUntilGate : IFlowStep
+        {
+            private readonly ManualResetEventSlim _gate;
+            private readonly ManualResetEventSlim _entered;
+
+            public IgnoreCancelUntilGate(ManualResetEventSlim gate, ManualResetEventSlim entered)
+            {
+                _gate = gate;
+                _entered = entered;
+            }
+
+            public string StepName => "IgnoreCancel";
+
+            public Task<StepResult> AsyncExecuteStep(IFlowContext context, CancellationToken token)
+            {
+                _entered.Set();
+                return Task.Run(() =>
+                {
+                    _gate.Wait();
+                    context.NextStepIndex++;
+                    return StepResult.Success();
+                });
+            }
         }
     }
 }

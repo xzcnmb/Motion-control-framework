@@ -44,7 +44,7 @@ namespace Sophon.Application
             ["UserView"] = UserLevel.None,
             ["AlarmCenterView"] = UserLevel.None,
             ["AlarmHistoryView"] = UserLevel.None,
-            ["StationView"] = UserLevel.None,
+            ["StationView"] = UserLevel.Operator,
 
             // 操作员及以上视图
             ["LimitMonitorView"] = UserLevel.Operator,

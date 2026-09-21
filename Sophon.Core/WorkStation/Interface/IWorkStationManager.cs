@@ -1,4 +1,4 @@
-﻿namespace Sophon.Core
+namespace Sophon.Core
 {
     public interface IWorkStationManager
     {
@@ -10,6 +10,8 @@
 
         void Stop(string stationName);
 
+        void Reset(string stationName);
+
         void StartAll();
 
         void PauseAll();
@@ -17,5 +19,7 @@
         void ResumeAll();
 
         void StopAll();
+
+        void ResetAll();
     }
 }

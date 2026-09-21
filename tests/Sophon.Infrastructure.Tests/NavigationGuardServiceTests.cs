@@ -34,6 +34,8 @@ namespace Sophon.Infrastructure.Tests
             Assert.True(guard.CanNavigate("UserView", out _, out _));
             Assert.True(guard.CanNavigate("AlarmCenterView", out _, out _));
             Assert.True(guard.CanNavigate("AlarmHistoryView", out _, out _));
+            Assert.False(guard.CanNavigate("StationView", out var reqStation, out _));
+            Assert.Equal(UserLevel.Operator, reqStation);
 
             // 操作员、工程师、管理员页面严格拦截
             Assert.False(guard.CanNavigate("LimitMonitorView", out var reqLvl1, out var r1));
@@ -63,6 +65,7 @@ namespace Sophon.Infrastructure.Tests
             // 操作员权限：可看监控和视觉取景
             Assert.True(guard.CanNavigate("LimitMonitorView", out _, out _));
             Assert.True(guard.CanNavigate("VisionMonitorView", out _, out _));
+            Assert.True(guard.CanNavigate("StationView", out _, out _));
 
             // 工程师权限视图被拦截
             Assert.False(guard.CanNavigate("AxisDebugView", out _, out _));
