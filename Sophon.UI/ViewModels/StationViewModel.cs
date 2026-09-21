@@ -97,7 +97,7 @@ namespace Sophon.UI.ViewModels
         {
             try
             {
-                // 1. 从已保存的流程图取流程名
+                // 1. 从已保存的 v2 流程图取流程名（启动后工站跑同一份 JSON，不再走 v1 线性步骤）
                 var flowNames = FlowGraphStore.ListFlowNames();
 
                 // 2. 确保每个流程都有对应工站（已存在则返回缓存）
