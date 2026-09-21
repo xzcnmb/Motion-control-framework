@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sophon.Core.Tests/Sophon.Core.Tests.csproj" />
+    <Project Path="tests/Sophon.Infrastructure.Tests/Sophon.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Sophon.Motion.Tests/Sophon.Motion.Tests.csproj" />
+    <Project Path="tests/Sophon.Vision.Tests/Sophon.Vision.Tests.csproj" />
+  </Folder>
+  <Project Path="Common/Common.csproj" />
+  <Project Path="Sophon.Application/Sophon.Application.csproj" />
+  <Project Path="Sophon.Contracts/Sophon.Contracts.csproj" />
+  <Project Path="Sophon.Core/Sophon.Core.csproj" />
+  <Project Path="Sophon.Infrastructure/Sophon.Infrastructure.csproj" />
+  <Project Path="Sophon.Motion/Sophon.Motion.csproj" />
+  <Project Path="Sophon.UI/Sophon.UI.csproj" />
+  <Project Path="Sophon.Vision/Sophon.Vision.csproj" />
+</Solution>

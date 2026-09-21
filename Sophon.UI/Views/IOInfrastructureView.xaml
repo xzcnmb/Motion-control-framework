@@ -1,0 +1,283 @@
+<UserControl
+    x:Class="Sophon.UI.Views.IOInfrastructureView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="800"
+    d:DesignWidth="1200"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F4F6F9"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <Style x:Key="IoCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderBrush" Value="#E8ECEF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="8" Opacity="0.05" ShadowDepth="2" Color="#000000" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+        <TabControl Background="Transparent" BorderThickness="0">
+            <!-- ================= TAB 1: 数字量输入 (DI) ================= -->
+            <TabItem Header="数字量输入 (DI) 监控与映射">
+                <Grid Margin="0,14,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 顶部工具栏与状态指引 -->
+                    <Border Grid.Row="0" Style="{StaticResource IoCardStyle}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="+ 新增 DI 点位" Style="{StaticResource ButtonPrimary}" Height="34" Command="{Binding AddDiCommand}" Margin="0,0,8,0" />
+                                <Button Content="- 删除选中" Style="{StaticResource ButtonDanger}" Height="34" Command="{Binding DeleteDiCommand}" Margin="0,0,16,0" />
+                                <Button Content="💾 保存并生效映射" Style="{StaticResource ButtonSuccess}" Height="34" Command="{Binding SaveIoCommand}" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Background="#E6F4FF" BorderBrush="#91CAFF" BorderThickness="1" CornerRadius="4" Padding="12,4" Margin="20,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="ℹ 信号说明：" FontWeight="SemiBold" Foreground="#1677FF" FontSize="12" />
+                                    <TextBlock Text="绿色灯代表当前逻辑有效（导通/报警触发）；常闭(NC)急停与安全门断开时读为0并映射为逻辑有效；支持配置硬件通道与毫秒级防抖滤波。"
+                                               Foreground="#262626" FontSize="12" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="10" Height="10" Fill="#52C41A" Margin="0,0,6,0" />
+                                <TextBlock Text="信号导通 (ON)" FontSize="12" Foreground="#595959" Margin="0,0,12,0" />
+                                <Ellipse Width="10" Height="10" Fill="#D9D9D9" Margin="0,0,6,0" />
+                                <TextBlock Text="信号断开 (OFF)" FontSize="12" Foreground="#595959" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- DI 点位配置与监控表格 -->
+                    <Border Grid.Row="1" Style="{StaticResource IoCardStyle}">
+                        <DataGrid ItemsSource="{Binding DiPoints}"
+                                  SelectedItem="{Binding SelectedDi}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  GridLinesVisibility="All"
+                                  HorizontalGridLinesBrush="#E8E8E8"
+                                  VerticalGridLinesBrush="#E8E8E8"
+                                  BorderThickness="1"
+                                  BorderBrush="#E8E8E8">
+                            <DataGrid.Columns>
+                                <!-- 状态指示灯列 -->
+                                <DataGridTemplateColumn Header="实时状态" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Ellipse Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="#D9D9D9" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Fill" Value="#52C41A" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="逻辑点名 (唯一标识)" Binding="{Binding LogicalName}" Width="190" FontWeight="SemiBold" />
+                                <DataGridTextColumn Header="物理卡号" Binding="{Binding CardNo}" Width="80" />
+                                <DataGridTextColumn Header="物理通道Bit" Binding="{Binding ChannelBit}" Width="95" />
+                                
+                                <DataGridComboBoxColumn Header="电气常态" SelectedItemBinding="{Binding Switch}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.SwitchTypes}" Width="120" />
+                                <DataGridCheckBoxColumn Header="极性反转" Binding="{Binding Invert}" Width="80" />
+                                <DataGridTextColumn Header="滤波时间(ms)" Binding="{Binding FilterMs}" Width="105" />
+                                <DataGridTextColumn Header="业务分类" Binding="{Binding Category}" Width="110" />
+                                <DataGridTextColumn Header="功能说明 / 工位描述" Binding="{Binding Description}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ================= TAB 2: 数字量输出 (DO) ================= -->
+            <TabItem Header="数字量输出 (DO) 调试与映射">
+                <Grid Margin="0,14,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 顶部工具栏与安全提示 -->
+                    <Border Grid.Row="0" Style="{StaticResource IoCardStyle}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="+ 新增 DO 点位" Style="{StaticResource ButtonPrimary}" Height="34" Command="{Binding AddDoCommand}" Margin="0,0,8,0" />
+                                <Button Content="- 删除选中" Style="{StaticResource ButtonDanger}" Height="34" Command="{Binding DeleteDoCommand}" Margin="0,0,16,0" />
+                                <Button Content="💾 保存并生效映射" Style="{StaticResource ButtonSuccess}" Height="34" Command="{Binding SaveIoCommand}" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Background="#FFFBE6" BorderBrush="#FFE58F" BorderThickness="1" CornerRadius="4" Padding="12,4" Margin="20,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚠ 手动输出安全警示：" FontWeight="SemiBold" Foreground="#D48806" FontSize="12" />
+                                    <TextBlock Text="强制操作将直接改变电磁阀、继电器与警示灯输出状态；调试气缸动作前请确保人员退避及工作区域无阻挡。"
+                                               Foreground="#262626" FontSize="12" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="10" Height="10" Fill="#FA8C16" Margin="0,0,6,0" />
+                                <TextBlock Text="输出闭合 (ON)" FontSize="12" Foreground="#595959" Margin="0,0,12,0" />
+                                <Ellipse Width="10" Height="10" Fill="#D9D9D9" Margin="0,0,6,0" />
+                                <TextBlock Text="输出断开 (OFF)" FontSize="12" Foreground="#595959" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- DO 表格与强制调试操作 -->
+                    <Border Grid.Row="1" Style="{StaticResource IoCardStyle}">
+                        <DataGrid ItemsSource="{Binding DoPoints}"
+                                  SelectedItem="{Binding SelectedDo}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  GridLinesVisibility="All"
+                                  HorizontalGridLinesBrush="#E8E8E8"
+                                  VerticalGridLinesBrush="#E8E8E8"
+                                  BorderThickness="1"
+                                  BorderBrush="#E8E8E8">
+                            <DataGrid.Columns>
+                                <!-- 输出指示灯 -->
+                                <DataGridTemplateColumn Header="当前状态" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Ellipse Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="#D9D9D9" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsOutputOn}" Value="True">
+                                                                <Setter Property="Fill" Value="#FA8C16" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="逻辑点名 (输出标识)" Binding="{Binding LogicalName}" Width="190" FontWeight="SemiBold" />
+                                <DataGridTextColumn Header="物理卡号" Binding="{Binding CardNo}" Width="80" />
+                                <DataGridTextColumn Header="物理通道Bit" Binding="{Binding ChannelBit}" Width="95" />
+                                <DataGridCheckBoxColumn Header="极性反转" Binding="{Binding Invert}" Width="80" />
+                                <DataGridTextColumn Header="业务分类" Binding="{Binding Category}" Width="110" />
+                                <DataGridTextColumn Header="输出功能说明" Binding="{Binding Description}" Width="*" />
+
+                                <!-- 手动强制调试操作列 -->
+                                <DataGridTemplateColumn Header="手动强制调试" Width="230">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <Button Content="强制 ON" Command="{Binding ForceOnCommand}" Style="{StaticResource ButtonWarning}" Height="26" Padding="8,0" FontSize="11" Margin="0,0,6,0" />
+                                                <Button Content="强制 OFF" Command="{Binding ForceOffCommand}" Style="{StaticResource ButtonDefault}" Height="26" Padding="8,0" FontSize="11" Margin="0,0,6,0" />
+                                                <Button Content="点动(200ms)" Command="{Binding PulseCommand}" Style="{StaticResource ButtonPrimary}" Height="26" Padding="8,0" FontSize="11" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ================= TAB 3: 气缸与执行机构绑定管理 ================= -->
+            <TabItem Header="气缸与执行机构绑定配置">
+                <Grid Margin="0,14,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 顶部工具栏 -->
+                    <Border Grid.Row="0" Style="{StaticResource IoCardStyle}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="+ 添加新气缸" Style="{StaticResource ButtonPrimary}" Height="34" Command="{Binding AddCylinderCommand}" Margin="0,0,8,0" />
+                                <Button Content="- 删除气缸" Style="{StaticResource ButtonDanger}" Height="34" Command="{Binding DeleteCylinderCommand}" Margin="0,0,16,0" />
+                                <Button Content="💾 保存气缸配置" Style="{StaticResource ButtonSuccess}" Height="34" Command="{Binding SaveCylindersCommand}" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Background="#F6FFED" BorderBrush="#B7EB8F" BorderThickness="1" CornerRadius="4" Padding="12,4" Margin="20,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="💡 气缸点位直接下拉绑定上方已配置的真实 DO/DI 逻辑点名。双电控电磁阀自动执行 200ms 脉冲防烧保护与双线圈互锁；配置到位磁开后具备超时自动预警。"
+                                           Foreground="#389E0D" FontSize="12" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- 气缸配置绑定表 -->
+                    <Border Grid.Row="1" Style="{StaticResource IoCardStyle}">
+                        <DataGrid ItemsSource="{Binding Cylinders}"
+                                  SelectedItem="{Binding SelectedCylinder}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  GridLinesVisibility="All"
+                                  HorizontalGridLinesBrush="#E8E8E8"
+                                  VerticalGridLinesBrush="#E8E8E8"
+                                  BorderThickness="1"
+                                  BorderBrush="#E8E8E8">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="气缸标识名称" Binding="{Binding Name}" Width="130" FontWeight="SemiBold" />
+                                <DataGridComboBoxColumn Header="电磁阀类型" SelectedItemBinding="{Binding Valve}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.ValveTypes}" Width="120" />
+
+                                <!-- 工作DO下拉绑定已声明点名 -->
+                                <DataGridComboBoxColumn Header="工作/伸出DO" SelectedItemBinding="{Binding WorkDoName}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.AvailableDoNames}" Width="160" />
+
+                                <!-- 复位DO下拉绑定已声明点名 -->
+                                <DataGridComboBoxColumn Header="复位/缩回DO (双电控)" SelectedItemBinding="{Binding HomeDoName}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.AvailableDoNames}" Width="170" />
+
+                                <!-- 工作到位DI下拉绑定已声明点名 -->
+                                <DataGridComboBoxColumn Header="工作到位磁开DI" SelectedItemBinding="{Binding WorkSensorDiName}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.AvailableDiNames}" Width="160" />
+
+                                <!-- 复位到位DI下拉绑定已声明点名 -->
+                                <DataGridComboBoxColumn Header="复位到位磁开DI" SelectedItemBinding="{Binding HomeSensorDiName}" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext.AvailableDiNames}" Width="160" />
+
+                                <DataGridTextColumn Header="脉冲宽度(ms)" Binding="{Binding PulseWidthMs}" Width="100" />
+                                <DataGridTextColumn Header="确认超时(ms)" Binding="{Binding ConfirmTimeoutMs}" Width="100" />
+                                <DataGridTextColumn Header="互锁防碰撞组" Binding="{Binding InterlockGroup}" Width="110" />
+                                <DataGridCheckBoxColumn Header="上电初始复位" Binding="{Binding ResetToHomeOnStart}" Width="95" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

@@ -1,0 +1,239 @@
+<UserControl
+    x:Class="Sophon.UI.Views.ProtocolInfrastructureView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="750"
+    d:DesignWidth="1150"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock FontSize="18" FontWeight="Bold" Foreground="#1F2937" Text="外设与气缸档案配置" />
+            <TextBlock Margin="0,6,0,0" FontSize="12" Foreground="#6B7280"
+                       Text="先配置串口/从站/点表与气缸 DO/DI，再去「气动与485外设」手动连接采集。进入监视页不会自动打开串口。" />
+        </StackPanel>
+
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+            <TabItem Header="485 / Modbus 外设">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <TextBlock FontWeight="SemiBold" Text="设备列表" />
+                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                    <Button Height="30" Margin="0,0,8,0" Command="{Binding AddDeviceCommand}" Content="新增" Style="{StaticResource ButtonPrimary}" />
+                                    <Button Height="30" Command="{Binding DeleteDeviceCommand}" Content="删除" Style="{StaticResource ButtonDanger}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" DisplayMemberPath="Name" BorderThickness="0" />
+                        </DockPanel>
+                    </Border>
+
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Margin="0,0,0,12" Text="连接参数" />
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="名称" />
+                                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                 Text="{Binding SelectedDevice.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="类别" />
+                                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                 Text="{Binding SelectedDevice.Category, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="传输方式" />
+                                        <ComboBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                  ItemsSource="{Binding Transports}"
+                                                  SelectedItem="{Binding SelectedDevice.Transport}" />
+                                    </Grid>
+
+                                    <TextBlock Margin="0,4,0,8" FontSize="11" Foreground="#9CA3AF" Text="RTU：填串口；TCP：填 IP 与端口。未用到的字段可留空。" />
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="串口" />
+                                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                                <ComboBox Width="200" Height="32" IsEditable="True"
+                                                          ItemsSource="{Binding AvailablePorts}"
+                                                          Text="{Binding SelectedDevice.PortName, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Button Margin="8,0,0,0" Height="32" Content="刷新端口" Command="{Binding RefreshPortsCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="波特率" />
+                                            <ComboBox Width="280" Height="32" HorizontalAlignment="Right" IsEditable="True"
+                                                      ItemsSource="{Binding BaudOptions}"
+                                                      Text="{Binding SelectedDevice.BaudRate, UpdateSourceTrigger=PropertyChanged}" />
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="校验 / 停止位" />
+                                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                                <ComboBox Width="136" Height="32" ItemsSource="{Binding ParityOptions}" SelectedItem="{Binding SelectedDevice.Parity}" />
+                                                <ComboBox Width="136" Height="32" Margin="8,0,0,0" ItemsSource="{Binding StopBitOptions}" SelectedItem="{Binding SelectedDevice.StopBits}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="IP" />
+                                            <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                     Text="{Binding SelectedDevice.Ip, UpdateSourceTrigger=PropertyChanged}" />
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="TCP 端口" />
+                                            <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                     Text="{Binding SelectedDevice.TcpPort, UpdateSourceTrigger=PropertyChanged}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="从站地址" />
+                                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                 Text="{Binding SelectedDevice.SlaveAddress, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="轮询周期 (ms)" />
+                                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                                 Text="{Binding SelectedDevice.PollPeriodMs, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid>
+                                        <TextBlock VerticalAlignment="Center" Text="超时 (ms) / 重试" />
+                                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                            <TextBox Width="136" Height="32" Text="{Binding SelectedDevice.TimeoutMs}" />
+                                            <TextBox Width="136" Height="32" Margin="8,0,0,0" Text="{Binding SelectedDevice.Retries}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="16">
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                        <TextBlock FontWeight="SemiBold" Text="寄存器点表" VerticalAlignment="Center" />
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Height="30" Margin="0,0,8,0" Command="{Binding AddTagCommand}" Content="增点" Style="{StaticResource ButtonDefault}" />
+                                            <Button Height="30" Command="{Binding DeleteTagCommand}" Content="删点" Style="{StaticResource ButtonDanger}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <DataGrid ItemsSource="{Binding SelectedTags}" SelectedItem="{Binding SelectedTag}"
+                                              AutoGenerateColumns="False" CanUserAddRows="False" Height="220">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="点名" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="120" />
+                                            <DataGridComboBoxColumn Header="区" SelectedItemBinding="{Binding Area}" Width="130" />
+                                            <DataGridTextColumn Header="地址" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                            <DataGridComboBoxColumn Header="类型" SelectedItemBinding="{Binding DataType}" Width="90" />
+                                            <DataGridCheckBoxColumn Header="可写" Binding="{Binding Writable}" Width="50" />
+                                            <DataGridTextColumn Header="Scale" Binding="{Binding Scale}" Width="70" />
+                                            <DataGridTextColumn Header="单位" Binding="{Binding Unit}" Width="70" />
+                                            <DataGridTextColumn Header="WriteMin" Binding="{Binding WriteMin}" Width="80" />
+                                            <DataGridTextColumn Header="WriteMax" Binding="{Binding WriteMax}" Width="80" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </Border>
+
+                            <Button Margin="0,12,0,0" Height="36" HorizontalAlignment="Right" Padding="16,0"
+                                    Command="{Binding SaveDevicesCommand}" Content="保存外设档案" Style="{StaticResource ButtonSuccess}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="气缸 / 夹爪">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <TextBlock FontWeight="SemiBold" Text="气缸列表" />
+                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                    <Button Height="30" Margin="0,0,8,0" Command="{Binding AddCylinderCommand}" Content="新增" Style="{StaticResource ButtonPrimary}" />
+                                    <Button Height="30" Command="{Binding DeleteCylinderCommand}" Content="删除" Style="{StaticResource ButtonDanger}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Cylinders}" SelectedItem="{Binding SelectedCylinder}" DisplayMemberPath="Name" BorderThickness="0" />
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Margin="0,0,0,12" Text="电磁阀与到位点名（须与 IO 映射一致）" />
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="名称" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.Name, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="阀类型" />
+                                <ComboBox Width="280" Height="32" HorizontalAlignment="Right"
+                                          ItemsSource="{Binding ValveKinds}"
+                                          SelectedItem="{Binding SelectedCylinder.Valve}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="工作 DO" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.WorkDoName, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="复位 DO" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.HomeDoName, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="工作到位 DI" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.WorkSensorDiName, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="复位到位 DI" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.HomeSensorDiName, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="脉冲 / 超时 (ms)" />
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                    <TextBox Width="136" Height="32" Text="{Binding SelectedCylinder.PulseWidthMs}" />
+                                    <TextBox Width="136" Height="32" Margin="8,0,0,0" Text="{Binding SelectedCylinder.ConfirmTimeoutMs}" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Text="互锁组" />
+                                <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                         Text="{Binding SelectedCylinder.InterlockGroup, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <CheckBox Content="上电复位到 Home" IsChecked="{Binding SelectedCylinder.ResetToHomeOnStart}" />
+                            <Button Margin="0,16,0,0" Height="36" HorizontalAlignment="Right" Padding="16,0"
+                                    Command="{Binding SaveCylindersCommand}" Content="保存气缸档案" Style="{StaticResource ButtonSuccess}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

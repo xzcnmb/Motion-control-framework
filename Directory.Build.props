@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- 全局：ini-parser 仅提供 netfx 资产（见 Common csproj TODO），统一静默 NU1701 -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
+  </PropertyGroup>
+</Project>

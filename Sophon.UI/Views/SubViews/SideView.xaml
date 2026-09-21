@@ -1,0 +1,245 @@
+<UserControl
+    x:Class="Sophon.UI.Views.SideView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="700"
+    d:DesignWidth="220"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    mc:Ignorable="d">
+
+    <Grid Background="#FFFFFF">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="65" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="55" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部 Logo 与系统标识 -->
+        <Border Grid.Row="0" BorderBrush="#F0F0F0" BorderThickness="0,0,0,1" Margin="10,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Image Source="/Resources/logo.png" Height="34" Width="34" RenderOptions.BitmapScalingMode="HighQuality" />
+                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="XIAOZHI" FontSize="16" FontWeight="Bold" Foreground="#1890FF" />
+                    <TextBlock Text="小智运动控制" FontSize="11" Foreground="#8C8C8C" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 当前登录身份与权限指示卡 -->
+        <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Margin="10,8,10,2" Padding="8,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CurrentUserName}" FontSize="13" FontWeight="Bold" Foreground="#1E293B" TextTrimming="CharacterEllipsis" />
+                    <Border Background="{Binding RoleBadgeColor}" CornerRadius="3" Padding="5,1" HorizontalAlignment="Left" Margin="0,3,0,0">
+                        <TextBlock Text="{Binding CurrentRoleBadge}" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                    </Border>
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="UserView"
+                        Content="切换"
+                        Style="{StaticResource ButtonDefault}"
+                        Height="24"
+                        Padding="6,0"
+                        FontSize="11"
+                        VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- 侧边导航菜单 -->
+        <hc:ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <hc:SideMenu Margin="0,8">
+                <!-- 首页 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="HomeView"
+                    Header="系统主页"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Home.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 硬件与轴配置 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="MotionCardConfigView"
+                    Header="硬件与轴配置"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Param.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 轴调试 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="AxisDebugView"
+                    Header="轴调试"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Axis.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 点位示教 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="TeachView"
+                    Header="点位示教"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Infra.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 流程编辑 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="FlowEditorView"
+                    Header="流程编辑"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Station.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 工站运行 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="StationView"
+                    Header="工站运行"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Station.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 气动与外设 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="DeviceControlView"
+                    Header="气动与485外设"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="ProtocolInfrastructureView"
+                    Header="外设与气缸配置"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Protocol.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- IO 映射与监控 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="IOInfrastructureView"
+                    Header="IO映射与监控"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 机器视觉 -->
+                <hc:SideMenuItem
+                    Header="机器视觉"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                    </hc:SideMenuItem.Icon>
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="CameraConfigView"
+                        Header="相机配置"
+                        FontSize="13" />
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="VisionMonitorView"
+                        Header="视觉监视"
+                        FontSize="13" />
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="VisionCalibrationView"
+                        Header="标定向导"
+                        FontSize="13" />
+                </hc:SideMenuItem>
+
+                <!-- 报警管理 -->
+                <hc:SideMenuItem
+                    Header="报警管理"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Alarm.png" />
+                    </hc:SideMenuItem.Icon>
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="AlarmCenterView"
+                        Header="实时报警"
+                        FontSize="13" />
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="LimitMonitorView"
+                        Header="限位监控"
+                        FontSize="13" />
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="AlarmRegisterView"
+                        Header="报警注册"
+                        FontSize="13" />
+                    <hc:SideMenuItem
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="AlarmHistoryView"
+                        Header="历史报警"
+                        FontSize="13" />
+                </hc:SideMenuItem>
+
+                <!-- 参数设置 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="ParamView"
+                    Header="参数设置"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/Param.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+
+                <!-- 用户管理 -->
+                <hc:SideMenuItem
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="UserView"
+                    Header="用户管理"
+                    FontSize="14">
+                    <hc:SideMenuItem.Icon>
+                        <Image Width="18" Height="18" Source="/Resources/User.png" />
+                    </hc:SideMenuItem.Icon>
+                </hc:SideMenuItem>
+            </hc:SideMenu>
+        </hc:ScrollViewer>
+
+        <!-- 底部版权与版本 -->
+        <Border Grid.Row="3" BorderBrush="#F0F0F0" BorderThickness="0,1,0,0" Margin="10,0">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock HorizontalAlignment="Center" FontSize="11" Foreground="#BFBFBF" Text="Version 2.5.0 企业版" />
+                <TextBlock HorizontalAlignment="Center" FontSize="11" Foreground="#BFBFBF" Text="小智运动控制平台" Margin="0,2,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

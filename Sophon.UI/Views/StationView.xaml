@@ -1,0 +1,88 @@
+﻿<UserControl
+    x:Class="Sophon.UI.Views.StationView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+
+    <Grid Margin="24,20,24,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部标题区 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="工站运行概览" FontSize="22" FontWeight="Bold" Foreground="#262626" />
+            <TextBlock Text="每个流程对应一个工站，可启动/暂停/继续/停止。流程来自已保存的流程图。"
+                       FontSize="13" Foreground="#8C8C8C" Margin="0,6,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 工具栏：刷新 -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Button Content="🔄 刷新工站列表"
+                    Style="{StaticResource ButtonDefault}"
+                    Height="34"
+                    Padding="16,0"
+                    HorizontalAlignment="Left"
+                    Command="{Binding RefreshCommand}" />
+        </Grid>
+
+        <!-- 工站列表 -->
+        <Border Grid.Row="2" Background="White" BorderBrush="#E8ECEF" BorderThickness="1" CornerRadius="8" Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="工站列表" FontSize="15" FontWeight="SemiBold" Foreground="#262626" Margin="0,0,0,10" />
+
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding Stations}"
+                          SelectedItem="{Binding SelectedStation}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          IsReadOnly="True"
+                          GridLinesVisibility="All"
+                          HorizontalGridLinesBrush="#F0F0F0"
+                          VerticalGridLinesBrush="#F0F0F0"
+                          BorderThickness="1"
+                          BorderBrush="#E8E8E8"
+                          HeadersVisibility="Column">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="工站名称" Binding="{Binding Name}" Width="*" FontWeight="SemiBold" />
+                        <DataGridTextColumn Header="运行状态" Binding="{Binding StateText}" Width="160" Foreground="{Binding StateColor}" FontWeight="Bold" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- 底部操作区 -->
+        <Border Grid.Row="3" Background="White" BorderBrush="#E8ECEF" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,12,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="▶ 启动" Style="{StaticResource ButtonSuccess}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding StartCommand}" />
+                    <Button Content="⏸ 暂停" Style="{StaticResource ButtonWarning}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding PauseCommand}" />
+                    <Button Content="▶ 继续" Style="{StaticResource ButtonPrimary}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding ResumeCommand}" />
+                    <Button Content="⏹ 停止" Style="{StaticResource ButtonDanger}" Height="36" Padding="20,0" Command="{Binding StopCommand}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12" Foreground="#8C8C8C" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

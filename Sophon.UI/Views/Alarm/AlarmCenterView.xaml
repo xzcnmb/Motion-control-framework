@@ -1,0 +1,235 @@
+<UserControl
+    x:Class="Sophon.UI.Views.Alarm.AlarmCenterView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="700"
+    d:DesignWidth="1100"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部操作栏 -->
+        <Border
+            Grid.Row="0"
+            Margin="0,0,0,12"
+            Padding="12,8"
+            Style="{StaticResource CardBorderStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock
+                        FontSize="18"
+                        FontWeight="Bold"
+                        Foreground="#1F2937"
+                        Text="报警中心监控与历史记录" />
+                    <Border
+                        Margin="16,0,0,0"
+                        Padding="8,2"
+                        Background="#FFF1F0"
+                        BorderBrush="#FFA39E"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Foreground="#CF1322" Text="当前活动报警数: " />
+                            <TextBlock
+                                FontWeight="Bold"
+                                Foreground="#CF1322"
+                                Text="{Binding ActiveAlarms.Count}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Column="2"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+                    <Button
+                        Margin="8,0"
+                        Command="{Binding ClearSelectedAlarmCommand}"
+                        Content="复位选中报警"
+                        Style="{StaticResource ButtonDashedSuccess}" />
+                    <Button
+                        Margin="8,0"
+                        Command="{Binding ClearAllAlarmsCommand}"
+                        Content="全部报警复位"
+                        Style="{StaticResource ButtonDashedDanger}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 上半区：当前活动报警列表 -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    Margin="0,0,0,8"
+                    FontSize="15"
+                    FontWeight="SemiBold"
+                    Foreground="#374151"
+                    Text="当前活动报警（实时）" />
+
+                <DataGrid
+                    Grid.Row="1"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    ItemsSource="{Binding ActiveAlarms}"
+                    SelectedItem="{Binding SelectedAlarm}"
+                    Style="{StaticResource DataGridCommonStyle}">
+                    <DataGrid.Columns>
+                        <!-- 严重等级着色标签 -->
+                        <DataGridTemplateColumn Width="100" Header="严重级别">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="4,2"
+                                        Padding="6,2"
+                                        HorizontalAlignment="Center"
+                                        Background="{Binding SeverityColor}"
+                                        CornerRadius="4">
+                                        <TextBlock
+                                            FontWeight="Bold"
+                                            Foreground="White"
+                                            Text="{Binding SeverityText}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTextColumn
+                            Width="140"
+                            Binding="{Binding Code}"
+                            Header="报警代码"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="220"
+                            Binding="{Binding Message}"
+                            Header="报警描述"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="120"
+                            Binding="{Binding LinkageMode}"
+                            Header="联动模式"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="110"
+                            Binding="{Binding Source}"
+                            Header="报警源"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="260"
+                            Binding="{Binding Detail}"
+                            Header="明细上下文"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="*"
+                            Binding="{Binding TriggerTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}"
+                            Header="触发时间"
+                            IsReadOnly="True" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- 下半区：报警历史记录 -->
+        <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel
+                    Grid.Row="0"
+                    Margin="0,0,0,8"
+                    Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Foreground="#374151"
+                        Text="报警历史记录库" />
+                    <Button
+                        Margin="24,0,8,0"
+                        Command="{Binding QueryHistoryCommand}"
+                        Content="刷新历史"
+                        Style="{StaticResource ButtonDashedInfo}" />
+                    <Button
+                        Margin="8,0"
+                        Command="{Binding ClearHistoryCommand}"
+                        Content="清空历史"
+                        Style="{StaticResource ButtonDashedWarning}" />
+                </StackPanel>
+
+                <DataGrid
+                    Grid.Row="1"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    ItemsSource="{Binding HistoryRecords}"
+                    Style="{StaticResource DataGridCommonStyle}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn
+                            Width="60"
+                            Binding="{Binding Id}"
+                            Header="序号"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="120"
+                            Binding="{Binding Severity}"
+                            Header="等级"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="140"
+                            Binding="{Binding Code}"
+                            Header="报警代码"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="220"
+                            Binding="{Binding Message}"
+                            Header="报警描述"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="110"
+                            Binding="{Binding Source}"
+                            Header="报警源"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="220"
+                            Binding="{Binding Detail}"
+                            Header="明细上下文"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="170"
+                            Binding="{Binding TriggerTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}"
+                            Header="触发时间"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="170"
+                            Binding="{Binding ClearTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}"
+                            Header="消除时间"
+                            IsReadOnly="True" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,381 @@
+<UserControl
+    x:Class="Sophon.UI.Views.UserView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="700"
+    d:DesignWidth="1100"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    mc:Ignorable="d">
+
+    <Grid>
+        <!-- 工业科技感深色渐变背景 -->
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0.0" Color="#0B132B" />
+                <GradientStop Offset="0.6" Color="#1C2541" />
+                <GradientStop Offset="1.0" Color="#0A192F" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <!-- 装饰性工业网格线 -->
+        <Canvas Opacity="0.08">
+            <Line X1="0" Y1="120" X2="2000" Y2="120" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+            <Line X1="0" Y1="320" X2="2000" Y2="320" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+            <Line X1="0" Y1="520" X2="2000" Y2="520" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+            <Line X1="200" Y1="0" X2="200" Y2="1200" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+            <Line X1="600" Y1="0" X2="600" Y2="1200" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+            <Line X1="1000" Y1="0" X2="1000" Y2="1200" Stroke="White" StrokeThickness="1" StrokeDashArray="4 4" />
+        </Canvas>
+
+        <!-- 登录卡片 -->
+        <Border
+            Width="860"
+            Height="540"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="White"
+            CornerRadius="16">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="40" Opacity="0.35" ShadowDepth="12" Color="#000000" />
+            </Border.Effect>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="420" />
+                    <ColumnDefinition Width="440" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧品牌展示区 -->
+                <Border Grid.Column="0" CornerRadius="16,0,0,16">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Offset="0.0" Color="#002766" />
+                            <GradientStop Offset="0.5" Color="#003A8C" />
+                            <GradientStop Offset="1.0" Color="#0958D9" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+
+                    <Grid Margin="36,40">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 顶部 Logo 与系统名 -->
+                        <StackPanel Grid.Row="0">
+                            <Border Background="#1668DC" CornerRadius="6" Padding="8,4" HorizontalAlignment="Left" Margin="0,0,0,16">
+                                <TextBlock Text="INDUSTRIAL CONTROL" FontSize="10" FontWeight="Bold" Foreground="#BAE0FF" />
+                            </Border>
+                            <TextBlock Text="小智运动控制框架" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,0,0,6" />
+                            <TextBlock Text="Xiaozhi Motion Control System" FontSize="13" Foreground="#91CAFF" />
+                        </StackPanel>
+
+                        <!-- 中间特点罗列 -->
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                            <Border Background="#093B88" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                                <TextBlock Text="⚡  高精插补：直线/圆弧/前瞻S曲线" FontSize="13" Foreground="#E6F4FF" />
+                            </Border>
+                            <Border Background="#093B88" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                                <TextBlock Text="👁  机器视觉：海康MVS+九点手眼标定" FontSize="13" Foreground="#E6F4FF" />
+                            </Border>
+                            <Border Background="#093B88" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                                <TextBlock Text="🛡  安全防线：气缸互锁防烧+限位看门狗" FontSize="13" Foreground="#E6F4FF" />
+                            </Border>
+                            <Border Background="#093B88" CornerRadius="8" Padding="14,10">
+                                <TextBlock Text="🔌  外设集成：RS485/Modbus仪表总线" FontSize="13" Foreground="#E6F4FF" />
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 底部版本与认证信息 -->
+                        <StackPanel Grid.Row="2">
+                            <TextBlock Text="v2.5 企业生产版 · 工业现场就绪" FontSize="11" Foreground="#BAE0FF" Opacity="0.85" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- 右侧表单操作区 -->
+                <Border Grid.Column="1" Background="#FFFFFF" CornerRadius="0,16,16,0" Padding="40,32">
+                    <Grid VerticalAlignment="Center">
+                        <!-- 1. 登录主面板 -->
+                        <StackPanel Visibility="{Binding IsLoginVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <TextBlock Text="用户认证登录" FontSize="22" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,4" />
+                            <TextBlock Text="请选择操作人员身份并输入密码以解锁工程页面" FontSize="12" Foreground="#6B7280" Margin="0,0,0,14" />
+
+                            <!-- 醒目的出厂默认密码与身份提示卡片 -->
+                            <Border Background="#F6FFED" BorderBrush="#B7EB8F" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="💡 出厂预置账户与密码提示 (默认口令: 123)" FontWeight="Bold" Foreground="#389E0D" FontSize="12" Margin="0,0,0,4" />
+                                    <TextBlock Text="• 管理员: 全权限 (含控制卡配置与底层工艺参数)" Foreground="#595959" FontSize="11" Margin="0,1" />
+                                    <TextBlock Text="• 工程师: 调试与示教 (轴调试/示教/流程/外设/标定/IO)" Foreground="#595959" FontSize="11" Margin="0,1" />
+                                    <TextBlock Text="• 操作员: 产线监视 (实时看板/视觉取景/报警监控)" Foreground="#595959" FontSize="11" Margin="0,1" />
+                                </StackPanel>
+                            </Border>
+
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="操作用户名" FontSize="12" FontWeight="Medium" Foreground="#4B5563" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock Text="快捷填入: " FontSize="11" Foreground="#8C8C8C" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <Button Content="管理员" Style="{StaticResource ButtonDefault}" Height="22" Padding="6,0" FontSize="11" Command="{Binding QuickSelectUserCommand}" CommandParameter="管理员" Margin="0,0,4,0" />
+                                    <Button Content="工程师" Style="{StaticResource ButtonDefault}" Height="22" Padding="6,0" FontSize="11" Command="{Binding QuickSelectUserCommand}" CommandParameter="工程师" Margin="0,0,4,0" />
+                                    <Button Content="操作员" Style="{StaticResource ButtonDefault}" Height="22" Padding="6,0" FontSize="11" Command="{Binding QuickSelectUserCommand}" CommandParameter="操作员" />
+                                </StackPanel>
+                            </Grid>
+
+                            <ComboBox
+                                Height="38"
+                                Margin="0,0,0,14"
+                                HorizontalContentAlignment="Left"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                IsEnabled="{Binding IsInputEnabled}"
+                                ItemsSource="{Binding UserList}"
+                                SelectedItem="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                hc:InfoElement.Placeholder="请选择操作用户名" />
+
+                            <TextBlock Text="操作密码 (默认: 123)" FontSize="12" FontWeight="Medium" Foreground="#4B5563" Margin="0,0,0,6" />
+                            <PasswordBox
+                                x:Name="TxtPassword"
+                                Height="38"
+                                Margin="0,0,0,18"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                IsEnabled="{Binding IsInputEnabled}" />
+
+                            <!-- 登录与注销按钮 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Button
+                                    Height="42"
+                                    Width="130"
+                                    Margin="0,0,10,0"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding LoginCommand}"
+                                    CommandParameter="{Binding ElementName=TxtPassword}"
+                                    Content="登  录"
+                                    Style="{StaticResource ButtonPrimary}"
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding IsInputEnabled}"
+                                    Tag="AllowOperator" />
+
+                                <Button
+                                    Height="42"
+                                    Width="100"
+                                    Margin="0,0,10,0"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding LogoutCommand}"
+                                    Content="注  销"
+                                    Style="{StaticResource ButtonWarning}"
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Tag="AllowOperator"
+                                    Visibility="{Binding IsLogoutBtnVisible, Converter={StaticResource BoolToVisConverter}}" />
+
+                                <Button
+                                    Height="42"
+                                    Width="100"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding ReturnHomeCommand}"
+                                    Content="返回主页"
+                                    Style="{StaticResource ButtonDefault}"
+                                    FontSize="14" />
+                            </StackPanel>
+
+                            <!-- 管理员操作通道 -->
+                            <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+                                <Grid>
+                                    <Button
+                                        HorizontalAlignment="Left"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Command="{Binding AddUserPanelCommand}"
+                                        Content="+ 新增用户"
+                                        FontSize="13"
+                                        Foreground="#1677FF"
+                                        Tag="AllowOperator"
+                                        Visibility="{Binding IsAdminButtonVisible, Converter={StaticResource BoolToVisConverter}}" />
+                                    <Button
+                                        HorizontalAlignment="Center"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Command="{Binding DeleteUserPanelCommand}"
+                                        Content="✕ 删除用户"
+                                        FontSize="13"
+                                        Foreground="#FF4D4F"
+                                        Tag="AllowOperator"
+                                        Visibility="{Binding IsAdminButtonVisible, Converter={StaticResource BoolToVisConverter}}" />
+                                    <Button
+                                        HorizontalAlignment="Right"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Command="{Binding ChangePwdPanelCommand}"
+                                        Content="✎ 修改密码"
+                                        FontSize="13"
+                                        Foreground="#D48806"
+                                        Tag="AllowOperator"
+                                        Visibility="{Binding IsAdminButtonVisible, Converter={StaticResource BoolToVisConverter}}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 2. 修改密码面板 -->
+                        <StackPanel Visibility="{Binding IsChangePwdPanelVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <TextBlock Text="修改用户密码" FontSize="20" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,6" />
+                            <TextBlock Text="选择目标用户并设置新的操作口令" FontSize="12" Foreground="#6B7280" Margin="0,0,0,20" />
+
+                            <TextBlock Text="目标用户" FontSize="12" FontWeight="Medium" Foreground="#4B5563" Margin="0,0,0,6" />
+                            <ComboBox
+                                Height="38"
+                                Margin="0,0,0,14"
+                                HorizontalContentAlignment="Left"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                ItemsSource="{Binding UserList}"
+                                SelectedValue="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="新密码" FontSize="12" FontWeight="Medium" Foreground="#4B5563" Margin="0,0,0,6" />
+                            <PasswordBox
+                                x:Name="TxtNewPwd"
+                                Height="38"
+                                Margin="0,0,0,20"
+                                VerticalContentAlignment="Center"
+                                FontSize="14" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Button
+                                    Width="120"
+                                    Height="40"
+                                    Margin="0,0,12,0"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding SaveNewPwdCommand}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="保  存"
+                                    Style="{StaticResource ButtonPrimary}"
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Tag="AllowOperator" />
+                                <Button
+                                    Width="100"
+                                    Height="40"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding SwitchToLoginCommand}"
+                                    Content="返  回"
+                                    Style="{StaticResource ButtonDefault}"
+                                    FontSize="14"
+                                    Tag="AllowOperator" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 3. 新增用户面板 -->
+                        <StackPanel Visibility="{Binding IsAddUserPanelVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <TextBlock Text="添加新操作员" FontSize="20" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,6" />
+                            <TextBlock Text="录入新操作人员信息及权限等级" FontSize="12" Foreground="#6B7280" Margin="0,0,0,16" />
+
+                            <TextBox
+                                x:Name="TxtUserName"
+                                Height="36"
+                                Margin="0,0,0,10"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                Text="{Binding NewUserName}"
+                                hc:InfoElement.Placeholder="请输入新用户名" />
+
+                            <PasswordBox
+                                x:Name="UserPwd_1"
+                                Height="36"
+                                Margin="0,0,0,10"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                hc:InfoElement.Placeholder="请输入初始密码" />
+
+                            <PasswordBox
+                                x:Name="UserPwd_2"
+                                Height="36"
+                                Margin="0,0,0,10"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                hc:InfoElement.Placeholder="请再次确认密码" />
+
+                            <ComboBox
+                                Height="36"
+                                Margin="0,0,0,18"
+                                HorizontalContentAlignment="Left"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                ItemsSource="{Binding LevelList}"
+                                SelectedValue="{Binding SelectedLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                hc:InfoElement.Placeholder="选择权限等级 (Operator / Engineer / Admin)" />
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button
+                                    Width="120"
+                                    Height="40"
+                                    Margin="0,0,12,0"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding SaveUserCommand}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="确  认  添  加"
+                                    Style="{StaticResource ButtonPrimary}"
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Tag="AllowOperator" />
+                                <Button
+                                    Width="90"
+                                    Height="40"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding CancelCommand}"
+                                    Content="取  消"
+                                    Style="{StaticResource ButtonDefault}"
+                                    FontSize="14"
+                                    Tag="AllowOperator" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 4. 删除用户面板 -->
+                        <StackPanel Visibility="{Binding IsDeleteUserPanelVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <TextBlock Text="删除操作人员" FontSize="20" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,6" />
+                            <TextBlock Text="选择需要注销或删除的操作人员" FontSize="12" Foreground="#6B7280" Margin="0,0,0,20" />
+
+                            <ComboBox
+                                Height="40"
+                                Margin="0,0,0,24"
+                                HorizontalContentAlignment="Left"
+                                VerticalContentAlignment="Center"
+                                FontSize="14"
+                                ItemsSource="{Binding UserList}"
+                                SelectedValue="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                hc:InfoElement.Placeholder="请选择要删除的用户" />
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button
+                                    Width="120"
+                                    Height="40"
+                                    Margin="0,0,12,0"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding DeleteUserCommand}"
+                                    Content="确  认  删  除"
+                                    Style="{StaticResource ButtonDanger}"
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Tag="AllowOperator" />
+                                <Button
+                                    Width="90"
+                                    Height="40"
+                                    hc:BorderElement.CornerRadius="6"
+                                    Command="{Binding CancelDeleteCommand}"
+                                    Content="取  消"
+                                    Style="{StaticResource ButtonDefault}"
+                                    FontSize="14"
+                                    Tag="AllowOperator" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

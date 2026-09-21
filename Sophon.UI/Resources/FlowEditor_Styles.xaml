@@ -1,0 +1,37 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
+    xmlns:vm="clr-namespace:Sophon.UI.ViewModels.FlowEditor">
+
+    <!-- 流程节点在 NodifyItemContainer 中的容器样式 -->
+    <Style x:Key="FlowNodeContainerStyle" TargetType="{x:Type nodify:ItemContainer}">
+        <Setter Property="Location" Value="{Binding Location, Mode=TwoWay}" />
+        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- 流程连线样式模版 -->
+    <DataTemplate x:Key="FlowConnectionTemplate" DataType="{x:Type vm:FlowConnectionViewModel}">
+        <nodify:LineConnection
+            Source="{Binding Source.Anchor}"
+            Target="{Binding Target.Anchor}"
+            Stroke="#1890FF"
+            StrokeThickness="2.5" />
+    </DataTemplate>
+
+    <!-- 待决连线样式模版（拖拽连线） -->
+    <DataTemplate x:Key="FlowPendingConnectionTemplate" DataType="{x:Type vm:PendingConnectionViewModel}">
+        <nodify:PendingConnection
+            IsVisible="True"
+            AllowOnlyConnectors="True"
+            EnablePreview="True"
+            Stroke="#52C41A"
+            StrokeThickness="2"
+            StartedCommand="{Binding StartCommand}"
+            CompletedCommand="{Binding FinishCommand}" />
+    </DataTemplate>
+
+</ResourceDictionary>

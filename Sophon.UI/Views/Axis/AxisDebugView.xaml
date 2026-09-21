@@ -1,0 +1,316 @@
+<UserControl
+    x:Class="Sophon.UI.Views.Axis.AxisDebugView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    d:DesignHeight="800"
+    d:DesignWidth="1400"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <Style x:Key="LimitDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="Fill" Value="#D9D9D9" />
+            <Setter Property="Margin" Value="2,0" />
+        </Style>
+        <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource ButtonDefault}">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="MinWidth" Value="52" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="#F0F2F5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="White" Margin="12,12,12,0" Padding="16,12" CornerRadius="8" Effect="{StaticResource EffectShadow2}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="#E6F7FF" CornerRadius="6" Width="36" Height="36" Margin="0,0,12,0">
+                        <Path Data="M3,13 L5,11 L9,15 L19,5 L21,7 L9,19 Z" Fill="#1890FF" Width="18" Height="18" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="轴控制与多轴实时调试" FontSize="18" FontWeight="Bold" Foreground="#262626" />
+                        <TextBlock Text="一行一轴，纵向滚动。轴数增多时比卡片更易操作。" FontSize="12" Foreground="#8C8C8C" Margin="0,2,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="全部使能" Command="{Binding EnableAllCommand}" Style="{StaticResource ButtonSuccess}" Margin="0,0,8,0" Height="34" Padding="12,0" />
+                    <Button Content="全部下使能" Command="{Binding DisableAllCommand}" Style="{StaticResource ButtonDefault}" Margin="0,0,8,0" Height="34" Padding="12,0" />
+                    <Button Content="全部回零" Command="{Binding HomeAllCommand}" Style="{StaticResource ButtonPrimary}" Margin="0,0,8,0" Height="34" Padding="12,0" />
+                    <Button Content="减速停止" Command="{Binding StopAllCommand}" Style="{StaticResource ButtonWarning}" Margin="0,0,8,0" Height="34" Padding="12,0" />
+                    <Button Content="全局急停" Command="{Binding AbortAllCommand}" Style="{StaticResource ButtonDanger}" Height="34" Padding="16,0" FontWeight="Bold" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <DataGrid
+            Grid.Row="1"
+            Margin="12,8,12,12"
+            ItemsSource="{Binding Axes}"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            CanUserDeleteRows="False"
+            CanUserReorderColumns="False"
+            HeadersVisibility="Column"
+            GridLinesVisibility="Horizontal"
+            RowHeaderWidth="0"
+            SelectionMode="Single"
+            SelectionUnit="FullRow"
+            EnableRowVirtualization="True"
+            VirtualizingPanel.IsVirtualizing="True"
+            VirtualizingPanel.VirtualizationMode="Recycling"
+            Background="White"
+            BorderBrush="#E5E7EB"
+            BorderThickness="1"
+            HorizontalScrollBarVisibility="Auto"
+            VerticalScrollBarVisibility="Auto"
+            RowHeight="56">
+
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                    <Setter Property="Background" Value="#FAFAFA" />
+                    <Setter Property="Foreground" Value="#595959" />
+                    <Setter Property="FontSize" Value="12" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="BorderBrush" Value="#F0F0F0" />
+                    <Setter Property="BorderThickness" Value="0,0,1,1" />
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="轴" Width="130" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                <TextBlock Text="{Binding AxisId, StringFormat='[{0}]'}" FontWeight="Bold" Foreground="#1890FF" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#262626" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="状态 / 使能" Width="150" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <Border Background="{Binding StateBrush}" CornerRadius="10" Padding="8,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding StateText}" FontSize="11" Foreground="White" FontWeight="SemiBold" />
+                                </Border>
+                                <Button Command="{Binding ToggleEnableCommand}" Height="26" Padding="8,0" FontSize="11" Content="{Binding EnableButtonText}">
+                                    <Button.Style>
+                                        <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                    <Setter Property="Background" Value="#52C41A" />
+                                                    <Setter Property="BorderBrush" Value="#52C41A" />
+                                                    <Setter Property="Foreground" Value="White" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="位置" Width="110" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                <TextBlock Text="{Binding Position, StringFormat='{}{0:F3}'}" FontSize="16" FontWeight="Bold" Foreground="#1890FF" />
+                                <TextBlock Text="{Binding Unit}" FontSize="11" Foreground="#8C8C8C" VerticalAlignment="Bottom" Margin="4,0,0,2" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="速度" Width="110" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                <TextBlock Text="{Binding Velocity, StringFormat='{}{0:F3}'}" FontSize="16" FontWeight="Bold" Foreground="#52C41A" />
+                                <TextBlock Text="{Binding Unit, StringFormat='{}{0}/s'}" FontSize="11" Foreground="#8C8C8C" VerticalAlignment="Bottom" Margin="4,0,0,2" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="限位 / 原点" Width="150" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="负硬 / 负软 / 原点 / 正软 / 正硬">
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse" BasedOn="{StaticResource LimitDotStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsNegativeHardLimit}" Value="True">
+                                                    <Setter Property="Fill" Value="#F5222D" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse" BasedOn="{StaticResource LimitDotStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsNegativeSoftLimit}" Value="True">
+                                                    <Setter Property="Fill" Value="#FAAD14" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse" BasedOn="{StaticResource LimitDotStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsHomed}" Value="True">
+                                                    <Setter Property="Fill" Value="#52C41A" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse" BasedOn="{StaticResource LimitDotStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPositiveSoftLimit}" Value="True">
+                                                    <Setter Property="Fill" Value="#FAAD14" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse" BasedOn="{StaticResource LimitDotStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPositiveHardLimit}" Value="True">
+                                                    <Setter Property="Fill" Value="#F5222D" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="点动" Width="200" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <Button Width="72" Height="28" Style="{StaticResource ButtonPrimary}" FontSize="11" Content="◀ JOG-">
+                                    <b:Interaction.Triggers>
+                                        <b:EventTrigger EventName="PreviewMouseDown">
+                                            <b:InvokeCommandAction Command="{Binding JogNegativeStartCommand}" />
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="PreviewMouseUp">
+                                            <b:InvokeCommandAction Command="{Binding JogNegativeStopCommand}" />
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="MouseLeave">
+                                            <b:InvokeCommandAction Command="{Binding JogNegativeStopCommand}" />
+                                        </b:EventTrigger>
+                                    </b:Interaction.Triggers>
+                                </Button>
+                                <Button Width="72" Height="28" Margin="6,0,0,0" Style="{StaticResource ButtonPrimary}" FontSize="11" Content="JOG+ ▶">
+                                    <b:Interaction.Triggers>
+                                        <b:EventTrigger EventName="PreviewMouseDown">
+                                            <b:InvokeCommandAction Command="{Binding JogPositiveStartCommand}" />
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="PreviewMouseUp">
+                                            <b:InvokeCommandAction Command="{Binding JogPositiveStopCommand}" />
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="MouseLeave">
+                                            <b:InvokeCommandAction Command="{Binding JogPositiveStopCommand}" />
+                                        </b:EventTrigger>
+                                    </b:Interaction.Triggers>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="点动速度" Width="220">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <RadioButton Content="高速" IsChecked="{Binding IsFastJogMode, UpdateSourceTrigger=PropertyChanged}" FontSize="11" VerticalAlignment="Center" />
+                                <RadioButton Content="微调" IsChecked="{Binding IsFastJogMode, Converter={StaticResource Boolean2BooleanReConverter}, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Margin="8,0,8,0" VerticalAlignment="Center" />
+                                <hc:NumericUpDown Value="{Binding FastJogSpeed}" Minimum="0.1" Maximum="1000" DecimalPlaces="1" Width="56" Height="26" FontSize="11" />
+                                <hc:NumericUpDown Value="{Binding FineJogSpeed}" Minimum="0.01" Maximum="100" DecimalPlaces="2" Width="56" Height="26" FontSize="11" Margin="4,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="绝对定位" Width="180">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <hc:NumericUpDown Value="{Binding TargetPosition}" DecimalPlaces="3" Width="80" Height="26" FontSize="11" />
+                                <Button Content="定位" Command="{Binding MoveAbsCommand}" Style="{StaticResource ButtonPrimary}" Height="26" Padding="8,0" FontSize="11" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="相对定位" Width="180">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <hc:NumericUpDown Value="{Binding RelativeDistance}" DecimalPlaces="3" Width="80" Height="26" FontSize="11" />
+                                <Button Content="相对" Command="{Binding MoveRelCommand}" Style="{StaticResource ButtonDefault}" Height="26" Padding="8,0" FontSize="11" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="运行速度" Width="130">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <hc:NumericUpDown Value="{Binding MoveSpeed}" Minimum="0.1" Maximum="2000" DecimalPlaces="1" Width="72" Height="26" FontSize="11" />
+                                <TextBlock Text="{Binding Unit, StringFormat='{}{0}/s'}" FontSize="11" Foreground="#8C8C8C" VerticalAlignment="Center" Margin="4,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="操作" Width="190" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                <Button Content="回零" Command="{Binding HomeCommand}" Style="{StaticResource ButtonPrimary}" Height="26" Padding="8,0" FontSize="11" />
+                                <Button Content="停止" Command="{Binding StopCommand}" Style="{StaticResource ButtonWarning}" Height="26" Padding="8,0" FontSize="11" Margin="6,0,0,0" />
+                                <Button Content="急停" Command="{Binding AbortCommand}" Style="{StaticResource ButtonDanger}" Height="26" Padding="8,0" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

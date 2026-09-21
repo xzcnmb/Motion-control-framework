@@ -1,0 +1,154 @@
+<UserControl
+    x:Class="Sophon.UI.Views.Alarm.LimitMonitorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="600"
+    d:DesignWidth="1000"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部操作条 -->
+        <Border
+            Grid.Row="0"
+            Margin="0,0,0,12"
+            Padding="12,8"
+            Style="{StaticResource CardBorderStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="#1F2937"
+                    Text="全局限位状态与瞬态协议监控" />
+
+                <StackPanel
+                    Grid.Column="2"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+                    <Button
+                        Margin="8,0"
+                        Command="{Binding ResetLimitCommand}"
+                        Content="瞬态协议复位（选中轴）"
+                        Style="{StaticResource ButtonDashedSuccess}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 轴限位列表 -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    Margin="0,0,0,8"
+                    FontSize="15"
+                    FontWeight="SemiBold"
+                    Foreground="#374151"
+                    Text="各轴软硬限位状态监视" />
+
+                <DataGrid
+                    Grid.Row="1"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    ItemsSource="{Binding AxisLimitStates}"
+                    SelectedItem="{Binding SelectedAxis}"
+                    Style="{StaticResource DataGridCommonStyle}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn
+                            Width="80"
+                            Binding="{Binding AxisId}"
+                            Header="轴编号"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="140"
+                            Binding="{Binding AxisName}"
+                            Header="轴名称"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="120"
+                            Binding="{Binding CurrentPosition, StringFormat={}{0:F3}}"
+                            Header="当前坐标"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="120"
+                            Binding="{Binding SoftLimitMin, StringFormat={}{0:F3}}"
+                            Header="软限位负极限"
+                            IsReadOnly="True" />
+                        <DataGridTextColumn
+                            Width="120"
+                            Binding="{Binding SoftLimitMax, StringFormat={}{0:F3}}"
+                            Header="软限位正极限"
+                            IsReadOnly="True" />
+
+                        <!-- 限位状态指示 -->
+                        <DataGridTemplateColumn Width="110" Header="软限位状态">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="4,2"
+                                        Padding="6,2"
+                                        HorizontalAlignment="Center"
+                                        Background="{Binding SoftLimitTriggered, Converter={x:Null}}"
+                                        CornerRadius="4">
+                                        <TextBlock
+                                            FontWeight="Bold"
+                                            Foreground="{Binding SoftLimitTriggered, Converter={x:Null}}"
+                                            Text="{Binding SoftLimitTriggered, Converter={x:Null}}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTemplateColumn Width="110" Header="硬限位状态">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="4,2"
+                                        Padding="6,2"
+                                        HorizontalAlignment="Center"
+                                        Background="{Binding StatusColor}"
+                                        CornerRadius="4">
+                                        <TextBlock
+                                            FontWeight="Bold"
+                                            Foreground="White"
+                                            Text="{Binding HardLimitTriggered, Converter={x:Null}}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTextColumn
+                            Width="130"
+                            Binding="{Binding ActiveLimitPoint}"
+                            Header="触发限位点"
+                            IsReadOnly="True" />
+                        <DataGridCheckBoxColumn
+                            Width="130"
+                            Binding="{Binding MotionInForbiddenDirectionProhibited}"
+                            Header="禁止同向运动"
+                            IsReadOnly="True" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

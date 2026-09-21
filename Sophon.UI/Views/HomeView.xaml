@@ -1,0 +1,53 @@
+<UserControl
+    x:Class="Sophon.UI.Views.HomeView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:prism="http://prismlibrary.com/"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F4F6F9">
+
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" CornerRadius="12" Padding="36,32" Margin="0,0,0,24">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Offset="0" Color="#002766" />
+                    <GradientStop Offset="1" Color="#0958D9" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <StackPanel>
+                <TextBlock Text="{Binding CurrentOperatorText}" FontSize="13" Foreground="#BAE0FF" Margin="0,0,0,8" />
+                <TextBlock Text="{Binding WelcomeTitle}" FontSize="32" FontWeight="Bold" Foreground="White" />
+                <TextBlock Text="{Binding WelcomeSubtitle}" FontSize="15" Foreground="#D6E4FF" Margin="0,10,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1">
+            <TextBlock Text="常用入口" FontSize="16" FontWeight="SemiBold" Foreground="#262626" Margin="0,0,0,12" />
+            <WrapPanel>
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="轴调试"
+                        Command="{Binding NavigateCommand}" CommandParameter="AxisDebugView" />
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="点位示教"
+                        Command="{Binding NavigateCommand}" CommandParameter="TeachView" />
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="流程编辑"
+                        Command="{Binding NavigateCommand}" CommandParameter="FlowEditorView" />
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="控制卡配置"
+                        Command="{Binding NavigateCommand}" CommandParameter="MotionCardConfigView" />
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="相机配置"
+                        Command="{Binding NavigateCommand}" CommandParameter="CameraConfigView" />
+                <Button Width="180" Height="44" Margin="0,0,12,12" Content="工站运行"
+                        Command="{Binding NavigateCommand}" CommandParameter="StationView" />
+            </WrapPanel>
+            <TextBlock Margin="0,16,0,0" FontSize="13" Foreground="#8C8C8C"
+                       Text="{Binding DriverKindName, StringFormat='当前驱动：{0}'}" />
+            <TextBlock Margin="0,6,0,0" FontSize="13" Foreground="#8C8C8C"
+                       Text="{Binding ConnectionStatusText}" />
+            <TextBlock Margin="0,6,0,0" FontSize="13" Foreground="#8C8C8C"
+                       Text="{Binding AlarmSummaryText}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

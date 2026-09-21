@@ -1,0 +1,105 @@
+<UserControl
+    x:Class="Sophon.UI.Views.Vision.CameraConfigView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="700"
+    d:DesignWidth="1100"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock FontSize="18" FontWeight="Bold" Foreground="#1F2937" Text="相机连接与采集配置" />
+            <TextBlock Margin="0,6,0,0" FontSize="12" Foreground="#6B7280"
+                       Text="先保存厂商、设备标识、曝光与增益，再应用到运行时。标定与监视使用当前已应用的配置。" />
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="12">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <TextBlock FontWeight="SemiBold" Text="已保存相机" />
+                        <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                            <Button Height="30" Margin="0,0,8,0" Command="{Binding AddConfigCommand}" Content="新增" Style="{StaticResource ButtonPrimary}" />
+                            <Button Height="30" Command="{Binding DeleteConfigCommand}" Content="删除" Style="{StaticResource ButtonDanger}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Configs}" SelectedItem="{Binding SelectedConfig}" DisplayMemberPath="Name" BorderThickness="0" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel>
+                    <TextBlock Margin="0,0,0,12" FontWeight="SemiBold" Text="连接参数" />
+
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="名称" />
+                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                 Text="{Binding SelectedConfig.Name, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="厂商 / 后端" />
+                        <ComboBox Width="280" Height="32" HorizontalAlignment="Right"
+                                  ItemsSource="{Binding VendorKinds}"
+                                  SelectedItem="{Binding SelectedConfig.Vendor}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="设备标识" />
+                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                 Text="{Binding SelectedConfig.DeviceKey, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <TextBlock Margin="0,0,0,12" FontSize="11" Foreground="#9CA3AF"
+                               Text="海康填序列号或用户自定义名；仿真可填图片目录，空则用内置仿真图源。" />
+
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="触发模式" />
+                        <ComboBox Width="280" Height="32" HorizontalAlignment="Right"
+                                  ItemsSource="{Binding TriggerModes}"
+                                  SelectedItem="{Binding SelectedConfig.TriggerMode}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="曝光 (μs)" />
+                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                 Text="{Binding SelectedConfig.ExposureUs, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="增益 (dB)" />
+                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                 Text="{Binding SelectedConfig.Gain, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="取帧超时 (ms)" />
+                        <TextBox Width="280" Height="32" HorizontalAlignment="Right"
+                                 Text="{Binding SelectedConfig.GrabTimeoutMs, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <CheckBox Margin="0,4,0,8" Content="GigE 自动优化包大小"
+                              IsChecked="{Binding SelectedConfig.OptimizePacketSize}" />
+                    <CheckBox Content="翻转 Y 轴（标定前与机械坐标系对齐）"
+                              IsChecked="{Binding SelectedConfig.FlipY}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="2" Margin="0,12,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+            <Button Height="36" Margin="0,0,8,0" Padding="16,0" Command="{Binding SaveCommand}" Content="保存" Style="{StaticResource ButtonDefault}" />
+            <Button Height="36" Padding="16,0" Command="{Binding ApplyCommand}" Content="保存并应用到运行时" Style="{StaticResource ButtonSuccess}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

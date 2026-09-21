@@ -1,0 +1,36 @@
+using Sophon.Core;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Sophon.Core.Flow.Steps
+{
+    public class FlowStep_Loop : FlowStepBase
+    {
+        public FlowStep_Loop(string stepName, List<IFlowStep> loopBranch, int totalLoops) : base(stepName)
+        {
+            _loopBranch = loopBranch ?? throw new ArgumentNullException(nameof(loopBranch));
+            _totalLoops = totalLoops;
+        }
+
+        private readonly List<IFlowStep> _loopBranch;
+        private readonly int _totalLoops;
+
+        protected override async Task AsyncExecuteCore(IFlowContext context, CancellationToken token)
+        {
+            for (int i = 0; i < _totalLoops; i++)
+            {
+                context.Logger.Info($"步骤{StepName}第{i}/{_totalLoops}次循环开始");
+                await AsyncExecuteBranch(context, token, _loopBranch, i);
+                context.Logger.Info($"步骤{StepName}第{i}/{_totalLoops}次循环完成始");
+            }
+            SetNextStepIndex(context);
+        }
+
+        protected override void SetNextStepIndex(IFlowContext context)
+        {
+            context.NextStepIndex++;
+        }
+    }
+}

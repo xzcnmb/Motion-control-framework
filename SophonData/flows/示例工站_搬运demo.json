@@ -1,0 +1,23 @@
+{
+  "Version": 2,
+  "FlowName": "示例工站_搬运demo",
+  "Nodes": [
+    { "Id": "n1", "NodeType": "Start", "Name": "开始", "Position": { "X": 40, "Y": 40 }, "Parameters": {}, "Ports": [ { "Id": "Out", "Name": "Out", "Direction": 1 } ] },
+    { "Id": "n2", "NodeType": "AxisHome", "Name": "X轴回零", "Position": { "X": 40, "Y": 160 }, "Parameters": { "axisId": 0, "mode": 3, "dir": 0, "speed": 50.0, "timeoutMs": 10000 }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 }, { "Id": "Out", "Name": "Out", "Direction": 1 } ] },
+    { "Id": "n3", "NodeType": "AxisHome", "Name": "Y轴回零", "Position": { "X": 40, "Y": 280 }, "Parameters": { "axisId": 1, "mode": 3, "dir": 0, "speed": 50.0, "timeoutMs": 10000 }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 }, { "Id": "Out", "Name": "Out", "Direction": 1 } ] },
+    { "Id": "n4", "NodeType": "VisionMeasure", "Name": "视觉定位", "Position": { "X": 40, "Y": 400 }, "Parameters": { "cameraId": "Cam1", "timeoutMs": 5000 }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 }, { "Id": "Out", "Name": "Out", "Direction": 1 } ] },
+    { "Id": "n5", "NodeType": "Branch", "Name": "判定OK", "Position": { "X": 40, "Y": 520 }, "Parameters": { "conditionKey": "VisionOk", "expectedValue": "true" }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 }, { "Id": "True", "Name": "True", "Direction": 1 }, { "Id": "False", "Name": "False", "Direction": 1 } ] },
+    { "Id": "n6", "NodeType": "MultiAxisInterp", "Name": "插补搬运", "Position": { "X": 320, "Y": 520 }, "Parameters": { "axisIds": [ 0, 1 ], "targetsFromContext": [ "VisionWorldX", "VisionWorldY" ], "speed": 100.0, "accel": 500.0, "decel": 500.0, "timeoutMs": 30000 }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 }, { "Id": "Out", "Name": "Out", "Direction": 1 } ] },
+    { "Id": "n7", "NodeType": "DoSet", "Name": "亮绿灯", "Position": { "X": 320, "Y": 640 }, "Parameters": { "pointName": "GreenLight", "value": true }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 } ] },
+    { "Id": "n8", "NodeType": "DoSet", "Name": "亮红灯", "Position": { "X": 560, "Y": 520 }, "Parameters": { "pointName": "RedLight", "value": true }, "Ports": [ { "Id": "In", "Name": "In", "Direction": 0 } ] }
+  ],
+  "Connections": [
+    { "FromNodeId": "n1", "FromPortId": "Out", "ToNodeId": "n2", "ToPortId": "In" },
+    { "FromNodeId": "n2", "FromPortId": "Out", "ToNodeId": "n3", "ToPortId": "In" },
+    { "FromNodeId": "n3", "FromPortId": "Out", "ToNodeId": "n4", "ToPortId": "In" },
+    { "FromNodeId": "n4", "FromPortId": "Out", "ToNodeId": "n5", "ToPortId": "In" },
+    { "FromNodeId": "n5", "FromPortId": "True", "ToNodeId": "n6", "ToPortId": "In" },
+    { "FromNodeId": "n6", "FromPortId": "Out", "ToNodeId": "n7", "ToPortId": "In" },
+    { "FromNodeId": "n5", "FromPortId": "False", "ToNodeId": "n8", "ToPortId": "In" }
+  ]
+}

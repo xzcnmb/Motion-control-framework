@@ -1,0 +1,582 @@
+<UserControl
+    x:Class="Sophon.UI.Views.Vision.VisionMonitorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    d:DesignHeight="800"
+    d:DesignWidth="1200"
+    prism:ViewModelLocator.AutoWireViewModel="True"
+    Background="#F3F6F9"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
+    </UserControl.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部操作控制栏 -->
+        <Border Grid.Row="0" Margin="0,0,0,10" Style="{StaticResource CardBorderStyle}">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧相机与采集动作 -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="15"
+                        FontWeight="Bold"
+                        Foreground="#333333"
+                        Text="选择相机：" />
+
+                    <ComboBox
+                        Width="160"
+                        Height="32"
+                        Margin="5,0,15,0"
+                        FontSize="14"
+                        ItemsSource="{Binding CameraList}"
+                        SelectedItem="{Binding SelectedCamera, Mode=TwoWay}" />
+
+                    <!-- 连接 / 断开按钮 -->
+                    <Button
+                        Width="105"
+                        Height="32"
+                        Margin="0,0,10,0"
+                        Command="{Binding ToggleConnectCommand}">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonPrimary}" TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Content" Value="断开连接" />
+                                        <Setter Property="Background" Value="#FF4D4F" />
+                                        <Setter Property="BorderBrush" Value="#FF4D4F" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="False">
+                                        <Setter Property="Content" Value="连接相机" />
+                                        <Setter Property="Background" Value="#1890FF" />
+                                        <Setter Property="BorderBrush" Value="#1890FF" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- 连续取景 开 / 停 按钮 -->
+                    <Button
+                        Width="115"
+                        Height="32"
+                        Margin="0,0,10,0"
+                        Command="{Binding ToggleLiveCommand}">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonSuccess}" TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLive}" Value="True">
+                                        <Setter Property="Content" Value="停止取景" />
+                                        <Setter Property="Background" Value="#FAAD14" />
+                                        <Setter Property="BorderBrush" Value="#FAAD14" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsLive}" Value="False">
+                                        <Setter Property="Content" Value="开启连续取景" />
+                                        <Setter Property="Background" Value="#52C41A" />
+                                        <Setter Property="BorderBrush" Value="#52C41A" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- 单次触发测量按钮 -->
+                    <Button
+                        Width="120"
+                        Height="32"
+                        Margin="0,0,15,0"
+                        Command="{Binding TriggerCommand}"
+                        Content="单次触发测量"
+                        Style="{StaticResource ButtonDashedPrimary}" />
+
+                    <!-- 等待结果动画指示 -->
+                    <StackPanel
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsWaitingResult, Converter={StaticResource BoolToVisConverter}}">
+                        <hc:LoadingCircle Width="24" Height="24" Foreground="#1890FF" />
+                        <TextBlock
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            FontSize="13"
+                            Foreground="#1890FF"
+                            Text="正在测量中..." />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 右侧运行状态指示 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border
+                        Width="10"
+                        Height="10"
+                        Margin="0,0,8,0"
+                        CornerRadius="5">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#D9D9D9" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Background" Value="#52C41A" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="#666666"
+                        Text="{Binding StatusMessage}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 主体区域：左侧实时画面，右侧测量结果与历史 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" MinWidth="480" />
+                <ColumnDefinition Width="2*" MinWidth="380" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧：实时视频取景窗口 -->
+            <Border Grid.Column="0" Margin="0,0,5,0" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 视口标题栏 -->
+                    <Border
+                        Grid.Row="0"
+                        Padding="12,8"
+                        Background="#FAFAFA"
+                        BorderBrush="#E8E8E8"
+                        BorderThickness="0,0,0,1"
+                        CornerRadius="8,8,0,0">
+                        <Grid>
+                            <TextBlock
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="Bold"
+                                Foreground="#262626"
+                                Text="实时画面监控 (灰度 8-bit)" />
+                            <TextBlock
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="#8C8C8C"
+                                Text="{Binding FrameInfo}" />
+                        </Grid>
+                    </Border>
+
+                    <!-- 图像渲染容器（暗色背景衬托灰度图像） -->
+                    <Border Grid.Row="1" Background="#141414" ClipToBounds="True">
+                        <Grid>
+                            <!-- 视频图像（复用 WriteableBitmap） -->
+                            <Image
+                                x:Name="CameraImage"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Source="{Binding VideoSource}"
+                                Stretch="Uniform"
+                                MouseLeftButtonDown="OnCameraImageMouseDown"
+                                MouseLeftButtonUp="OnCameraImageMouseUp"
+                                Cursor="Cross" />
+
+                            <!-- 中心瞄准十字线 -->
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                <Line
+                                    X1="-40" Y1="0" X2="40" Y2="0"
+                                    Stroke="#8000FF00"
+                                    StrokeThickness="1"
+                                    StrokeDashArray="4 2" />
+                                <Line
+                                    X1="0" Y1="-40" X2="0" Y2="40"
+                                    Stroke="#8000FF00"
+                                    StrokeThickness="1"
+                                    StrokeDashArray="4 2" />
+                                <Ellipse
+                                    Width="30"
+                                    Height="30"
+                                    Margin="-15"
+                                    Stroke="#8000FF00"
+                                    StrokeThickness="1"
+                                    StrokeDashArray="3 2" />
+                            </Grid>
+
+                            <!-- 无画面时的提示占位 -->
+                            <StackPanel
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                IsHitTestVisible="False">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding VideoSource}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="16"
+                                    Foreground="#8C8C8C"
+                                    Text="暂无视频帧信号" />
+                                <TextBlock
+                                    Margin="0,6,0,0"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="#595959"
+                                    Text="请连接相机并开启连续取景" />
+                            </StackPanel>
+
+                            <!-- 左下角信息水印 -->
+                            <Border
+                                Margin="10"
+                                Padding="8,4"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Bottom"
+                                Background="#80000000"
+                                CornerRadius="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="#E6E6E6"
+                                    Text="{Binding FrameInfo}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- 视口底部：视觉引导对位交互控制栏 -->
+                    <Border
+                        Grid.Row="2"
+                        Padding="12,8"
+                        Background="#FAFAFA"
+                        BorderBrush="#E8E8E8"
+                        BorderThickness="0,1,0,0"
+                        CornerRadius="0,0,8,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox IsChecked="{Binding IsVisualGuidanceEnabled, Mode=TwoWay}"
+                                          Content="启用视口点击/拖拽对位"
+                                          FontWeight="SemiBold"
+                                          Foreground="#262626"
+                                          Margin="0,0,16,0" />
+
+                                <TextBlock Text="对位模式:" VerticalAlignment="Center" FontSize="12" Foreground="#595959" Margin="0,0,6,0" />
+                                <ComboBox Width="130" Height="28" FontSize="12"
+                                          ItemsSource="{Binding MountModes}"
+                                          SelectedItem="{Binding MountMode, Mode=TwoWay}"
+                                          Margin="0,0,16,0" />
+
+                                <TextBlock Text="对位速度(mm/s):" VerticalAlignment="Center" FontSize="12" Foreground="#595959" Margin="0,0,6,0" />
+                                <TextBox Width="60" Height="28" FontSize="12" Text="{Binding GuidanceSpeed, Mode=TwoWay}" Margin="0,0,16,0" />
+
+                                <TextBlock Text="提示: 开启后在画面上点击任意特征，X/Y轴自动移动使其对齐准星；按住拖动可进行矢量微调。"
+                                           FontSize="11" Foreground="#8C8C8C" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="对位状态: " FontSize="12" Foreground="#595959" FontWeight="Medium" />
+                                <TextBlock Text="{Binding LastAlignmentInfo}" FontSize="12" Foreground="#1677FF" FontWeight="Bold" Margin="4,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- 右侧：最新测量结果与历史列表 -->
+            <Grid Grid.Column="1" Margin="5,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- 最新测量结果卡片 -->
+                <Border Grid.Row="0" Margin="0,0,0,10" Style="{StaticResource CardBorderStyle}">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 卡片头部标题 -->
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="Bold"
+                                Foreground="#262626"
+                                Text="最新测量结果" />
+
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="#8C8C8C"
+                                    Text="请求ID: " />
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Foreground="#595959"
+                                    Text="{Binding LatestResult.RequestIdShort, TargetNullValue='--'}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- OK / NG 大状态指示横幅 -->
+                        <Border
+                            Grid.Row="1"
+                            Padding="12,10"
+                            CornerRadius="6">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#F5F5F5" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LatestResult.Ok}" Value="True">
+                                            <Setter Property="Background" Value="#F6FFED" />
+                                            <Setter Property="BorderBrush" Value="#B7EB8F" />
+                                            <Setter Property="BorderThickness" Value="1" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LatestResult.Ok}" Value="False">
+                                            <Setter Property="Background" Value="#FFF1F0" />
+                                            <Setter Property="BorderBrush" Value="#FFA39E" />
+                                            <Setter Property="BorderThickness" Value="1" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- 判定状态标签 -->
+                                <TextBlock
+                                    Grid.Column="0"
+                                    VerticalAlignment="Center"
+                                    FontSize="26"
+                                    FontWeight="Black"
+                                    Foreground="{Binding LatestResult.StatusColor, TargetNullValue='#8C8C8C'}"
+                                    Text="{Binding LatestResult.StatusText, TargetNullValue='WAIT'}" />
+
+                                <!-- 匹配置信度 -->
+                                <StackPanel
+                                    Grid.Column="2"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="11"
+                                        Foreground="#8C8C8C"
+                                        Text="匹配得分 (Score)" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="18"
+                                        FontWeight="Bold"
+                                        Foreground="#262626"
+                                        Text="{Binding LatestResult.ScorePercentText, TargetNullValue='--'}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 坐标明细表：像素系 vs 物理世界系 -->
+                        <Grid Grid.Row="2" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 像素坐标系 -->
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock
+                                    Margin="0,0,0,6"
+                                    FontSize="13"
+                                    FontWeight="Bold"
+                                    Foreground="#1890FF"
+                                    Text="像素坐标原值 (px)" />
+
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="像素 X：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.X, StringFormat='{}{0:F2} px', TargetNullValue='--'}" />
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="像素 Y：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.Y, StringFormat='{}{0:F2} px', TargetNullValue='--'}" />
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="像素角度 θ：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.AngleDeg, StringFormat='{}{0:F2}°', TargetNullValue='--'}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- 分割线 -->
+                            <Border Grid.Column="1" Background="#E8E8E8" />
+
+                            <!-- 物理世界坐标系 -->
+                            <StackPanel Grid.Column="2" Margin="10,0,0,0">
+                                <TextBlock
+                                    Margin="0,0,0,6"
+                                    FontSize="13"
+                                    FontWeight="Bold"
+                                    Foreground="#52C41A"
+                                    Text="物理世界坐标 (mm)" />
+
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="物理 WorldX：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.WorldX, StringFormat='{}{0:F3} mm', TargetNullValue='--'}" />
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="物理 WorldY：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.WorldY, StringFormat='{}{0:F3} mm', TargetNullValue='--'}" />
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock FontSize="12" Foreground="#8C8C8C" Text="物理角度 θ：" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Text="{Binding LatestResult.WorldAngleDeg, StringFormat='{}{0:F2}°', TargetNullValue='--'}" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- 历史测量记录表格（最近 20 条） -->
+                <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 表格头部 -->
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <TextBlock
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                FontSize="14"
+                                FontWeight="Bold"
+                                Foreground="#262626"
+                                Text="测量历史记录 (最新 20 条)" />
+
+                            <Button
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Command="{Binding ClearHistoryCommand}"
+                                Content="清空历史"
+                                Style="{StaticResource ButtonDashedDanger}" />
+                        </Grid>
+
+                        <!-- 数据网格 -->
+                        <DataGrid
+                            Grid.Row="1"
+                            AutoGenerateColumns="False"
+                            IsReadOnly="True"
+                            ItemsSource="{Binding ResultHistory}"
+                            Style="{StaticResource DataGridCommonStyle}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn
+                                    Width="85"
+                                    Binding="{Binding TimestampText}"
+                                    Header="时间" />
+                                <DataGridTemplateColumn Width="60" Header="判定">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border
+                                                Padding="4,1"
+                                                HorizontalAlignment="Center"
+                                                Background="{Binding StatusColor}"
+                                                CornerRadius="3">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    FontWeight="Bold"
+                                                    Foreground="White"
+                                                    Text="{Binding StatusText}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn
+                                    Width="65"
+                                    Binding="{Binding ScorePercentText}"
+                                    Header="得分" />
+                                <DataGridTextColumn
+                                    Width="90"
+                                    Binding="{Binding X, StringFormat='{}{0:F1}'}"
+                                    Header="像素X" />
+                                <DataGridTextColumn
+                                    Width="90"
+                                    Binding="{Binding Y, StringFormat='{}{0:F1}'}"
+                                    Header="像素Y" />
+                                <DataGridTextColumn
+                                    Width="95"
+                                    Binding="{Binding WorldX, StringFormat='{}{0:F2}'}"
+                                    Header="物理X(mm)" />
+                                <DataGridTextColumn
+                                    Width="95"
+                                    Binding="{Binding WorldY, StringFormat='{}{0:F2}'}"
+                                    Header="物理Y(mm)" />
+                                <DataGridTextColumn
+                                    Width="*"
+                                    Binding="{Binding AngleDeg, StringFormat='{}{0:F1}°'}"
+                                    Header="角度" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,440 @@
+﻿using HandyControl.Controls;
+using Prism.Commands;
+using Prism.Events;
+using Prism.Mvvm;
+using Prism.Navigation.Regions;
+using Sophon.Application;
+using Sophon.Core.Event;
+using Sophon.Infrastructure;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Controls;
+
+namespace Sophon.UI.ViewModels
+{
+    public class UserViewModel : BindableBase, INavigationAware
+    {
+        private string _userName = "未登录";
+
+        public string UserName
+        {
+            get { return _userName; }
+            set { SetProperty(ref _userName, value); }
+        }
+
+        private bool _isAdminButtonVisible;
+
+        public bool IsAdminButtonVisible
+        {
+            get { return _isAdminButtonVisible; }
+            set { SetProperty(ref _isAdminButtonVisible, value); }
+        }
+
+        private bool _isChangePwdPanelVisible;
+
+        public bool IsChangePwdPanelVisible
+        {
+            get { return _isChangePwdPanelVisible; }
+            set { SetProperty(ref _isChangePwdPanelVisible, value); }
+        }
+
+        private bool _isAddUserPanelVisible;
+
+        public bool IsAddUserPanelVisible
+        {
+            get { return _isAddUserPanelVisible; }
+            set { SetProperty(ref _isAddUserPanelVisible, value); }
+        }
+
+        private bool _isDeleteUserPanelVisible;
+
+        public bool IsDeleteUserPanelVisible
+        {
+            get { return _isDeleteUserPanelVisible; }
+            set { SetProperty(ref _isDeleteUserPanelVisible, value); }
+        }
+
+        private bool _isLoginVisible;
+
+        public bool IsLoginVisible
+        {
+            get { return _isLoginVisible; }
+            set { SetProperty(ref _isLoginVisible, value); }
+        }
+
+        private bool _isLogoutBtnVisible;
+
+        public bool IsLogoutBtnVisible
+        {
+            get { return _isLogoutBtnVisible; }
+            set { SetProperty(ref _isLogoutBtnVisible, value); }
+        }
+
+        private bool _isInputEnabled;
+
+        public bool IsInputEnabled
+        {
+            get { return _isInputEnabled; }
+            set { SetProperty(ref _isInputEnabled, value); }
+        }
+
+        private ObservableCollection<string> _userList;
+
+        public ObservableCollection<string> UserList
+        {
+            get { return _userList; }
+            set { SetProperty(ref _userList, value); }
+        }
+
+        private string _newUserName;
+
+        public string NewUserName
+        {
+            get { return _newUserName; }
+            set { SetProperty(ref _newUserName, value); }
+        }
+
+        private UserLevel _selectedlevel;
+
+        public UserLevel SelectedLevel
+        {
+            get { return _selectedlevel; }
+            set { SetProperty(ref _selectedlevel, value); }
+        }
+
+        private ObservableCollection<string> _levelList;
+
+        public ObservableCollection<string> LevelList
+        {
+            get { return _levelList; }
+            set { SetProperty(ref _levelList, value); }
+        }
+
+        public DelegateCommand<object> LoginCommand { get; private set; }
+        public DelegateCommand LogoutCommand { get; private set; }
+        public DelegateCommand ChangePwdPanelCommand { get; private set; }
+
+        public DelegateCommand<object> SaveNewPwdCommand { get; private set; }
+        public DelegateCommand SwitchToLoginCommand { get; private set; }
+        public DelegateCommand AddUserPanelCommand { get; private set; }
+        public DelegateCommand<object> SaveUserCommand { get; private set; }
+        public DelegateCommand CancelCommand { get; private set; }
+        public DelegateCommand DeleteUserPanelCommand { get; private set; }
+        public DelegateCommand DeleteUserCommand { get; private set; }
+        public DelegateCommand CancelDeleteCommand { get; private set; }
+        public DelegateCommand<string> QuickSelectUserCommand { get; private set; }
+        public DelegateCommand ReturnHomeCommand { get; private set; }
+
+        private readonly IUserRepository _userRepository;
+        private readonly IUserContext _userContext;
+        private readonly IEventAggregator _eventAggregator;
+        private readonly IRegionManager? _regionManager;
+
+        public UserViewModel(
+            IUserRepository userRepository,
+            IUserContext userContext,
+            IEventAggregator eventAggregator,
+            IRegionManager? regionManager = null)
+        {
+            LoginCommand = new DelegateCommand<object>(ExecuteLogin);
+            LogoutCommand = new DelegateCommand(ExecuteLogout);
+            ChangePwdPanelCommand = new DelegateCommand(ExecuteChangePwdPanel);
+            SaveNewPwdCommand = new DelegateCommand<object>(ExecuteSaveNewPwd);
+            SwitchToLoginCommand = new DelegateCommand(ExecuteSwitchToLogin);
+            AddUserPanelCommand = new DelegateCommand(ExecuteAddUserPanel);
+            SaveUserCommand = new DelegateCommand<object>(ExecuteSaveUser);
+            CancelCommand = new DelegateCommand(ExecuteCancel);
+            DeleteUserPanelCommand = new DelegateCommand(ExecuteDeleteUserPanel);
+            DeleteUserCommand = new DelegateCommand(ExecuteDeleteUser);
+            CancelDeleteCommand = new DelegateCommand(ExecuteCancelDelete);
+            QuickSelectUserCommand = new DelegateCommand<string>(ExecuteQuickSelectUser);
+            ReturnHomeCommand = new DelegateCommand(() => _regionManager?.RequestNavigate("ContentRegion", "HomeView"));
+
+            _userRepository = userRepository;
+            _userContext = userContext;
+            _eventAggregator = eventAggregator;
+            _regionManager = regionManager;
+            ExecuteSwitchToLogin();
+
+            UserList = new ObservableCollection<string>();
+            LevelList = new ObservableCollection<string>()
+            {
+                UserLevel.Operator.ToString(),
+                UserLevel.Engineer.ToString(),
+                UserLevel.Admin.ToString(),
+            };
+            _ = LoadUserListAsync();
+        }
+
+        public Task LoadUserListAsync()
+        {
+            return UpdateUserListAsync();
+        }
+
+        private void ExecuteQuickSelectUser(string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                UserName = name;
+            }
+        }
+
+        /// <summary>
+        /// 登录操作
+        /// </summary>
+        /// <param name="param"></param>
+        private void ExecuteLogin(object param)
+        {
+            try
+            {
+                var passwordBox = param as System.Windows.Controls.PasswordBox;
+                string password = passwordBox?.Password ?? "";
+
+                if (string.IsNullOrWhiteSpace(UserName) || UserName == "未登录")
+                {
+                    Notify("请先选择操作用户名");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    Notify("请输入密码（出厂默认: 123）");
+                    return;
+                }
+
+                string storedPassword = _userRepository.GetPasswordByUserName(UserName);
+                if (!string.IsNullOrEmpty(storedPassword) && password == storedPassword)
+                {
+                    _userContext.ApplyLogin(UserName);
+                    _eventAggregator.GetEvent<UserChangeEvent>().Publish(UserName);
+                    Notify($"欢迎您，{UserName}！登录成功。", success: true);
+                    passwordBox?.Clear();
+                    return;
+                }
+
+                Notify("用户名或密码错误（出厂默认密码: 123）");
+                passwordBox?.Clear();
+                UpdateUI();
+            }
+            catch (Exception ex)
+            {
+                Notify($"登录失败: {ex.Message}");
+            }
+        }
+
+        private static void Notify(string message, bool success = false)
+        {
+            try
+            {
+                if (success) Growl.Success(message);
+                else Growl.Warning(message);
+            }
+            catch
+            {
+            }
+
+            if (!success)
+            {
+                System.Windows.MessageBox.Show(message, "登录提示",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>
+        /// 退出登录
+        /// </summary>
+        private void ExecuteLogout()
+        {
+            UserName = "未登录";
+            _userContext.ApplyLogin(UserName);
+            _eventAggregator.GetEvent<UserChangeEvent>().Publish(UserName);
+            IsChangePwdPanelVisible = false;
+            IsLoginVisible = true;
+            UpdateUI();
+        }
+
+        /// <summary>
+        /// 切换至修改密码界面
+        /// </summary>
+        private void ExecuteChangePwdPanel()
+        {
+            IsChangePwdPanelVisible = true;
+            IsLoginVisible = false;
+        }
+
+        /// <summary>
+        /// 保存新密码
+        /// </summary>
+        /// <param name="param"></param>
+        private void ExecuteSaveNewPwd(object param)
+        {
+            var view = param as UserControl;
+            var txtNewPwd = view.FindName("TxtNewPwd") as System.Windows.Controls.PasswordBox;
+
+            if (_userRepository.ChangePassword(UserName, txtNewPwd?.Password))
+            {
+                txtNewPwd?.Clear();
+                ExecuteSwitchToLogin();
+                ExecuteLogout();
+            }
+            else
+            {
+                Growl.Warning("修改密码失败！");
+            }
+        }
+
+        /// <summary>
+        /// 返回登陆界面
+        /// </summary>
+        private void ExecuteSwitchToLogin()
+        {
+            IsChangePwdPanelVisible = false;
+            IsLoginVisible = true;
+            UpdateUI();
+        }
+
+        private void ExecuteAddUserPanel()
+        {
+            IsAddUserPanelVisible = true;
+            IsLoginVisible = false;
+        }
+
+        private async Task SaveUserAsync(object param)
+        {
+            if (string.IsNullOrEmpty(NewUserName))
+            {
+                Growl.Warning("请正确输入用户名！");
+                return;
+            }
+            var user = await _userRepository.GetUserByName(NewUserName);
+            if (user != null)
+            {
+                Growl.Warning("用户名已经存在！");
+                return;
+            }
+
+            var view = param as UserControl;
+            var txtPwd_1 = view.FindName("UserPwd_1") as System.Windows.Controls.PasswordBox;
+            var txtPwd_2 = view.FindName("UserPwd_2") as System.Windows.Controls.PasswordBox;
+
+            if (txtPwd_1?.Password != txtPwd_2?.Password)
+            {
+                Growl.Warning("请确保两次密码输入一致！");
+                return;
+            }
+
+            if (SelectedLevel == 0)
+            {
+                Growl.Warning("请选择用户等级！");
+                return;
+            }
+
+            var newUser = new User()
+            {
+                UserName = NewUserName,
+                Password = txtPwd_1?.Password,
+                CreateTime = DateTime.Now,
+                LatestChangeTime = DateTime.Now,
+                UserLevel = SelectedLevel
+            };
+            int result = await _userRepository.InsertAsync(newUser);
+            if (result == 0)
+            {
+                Growl.Warning("新建用户失败！");
+                return;
+            }
+            await UpdateUserListAsync();
+            ExecuteLogout();
+            ExecuteCancel();
+        }
+
+        private async void ExecuteSaveUser(object param)
+        {
+            await SaveUserAsync(param);
+        }
+
+        private void ExecuteCancel()
+        {
+            IsAddUserPanelVisible = false;
+            IsLoginVisible = true;
+            UpdateUI();
+        }
+
+        private void ExecuteDeleteUserPanel()
+        {
+            IsDeleteUserPanelVisible = true;
+            IsLoginVisible = false;
+        }
+
+        private async void ExecuteDeleteUser()
+        {
+            _userRepository.DeleteUser(UserName);
+            await UpdateUserListAsync();
+            ExecuteLogout();
+            ExecuteCancelDelete();
+        }
+
+        private async void ExecuteCancelDelete()
+        {
+            IsDeleteUserPanelVisible = false;
+            IsLoginVisible = true;
+            UpdateUI();
+        }
+
+        private void UpdateUI()
+        {
+            bool isLoggedOut = !_userContext.IsLoggedIn;
+            bool isAdmin = _userContext.CurrentLevel == UserLevel.Admin;
+
+            IsInputEnabled = isLoggedOut;
+            IsLogoutBtnVisible = !isLoggedOut;
+            IsAdminButtonVisible = !isLoggedOut && isAdmin;
+        }
+
+        private async Task UpdateUserListAsync()
+        {
+            List<string> names;
+            try
+            {
+                names = await _userRepository.GetAllUserNames();
+            }
+            catch
+            {
+                names = new List<string>();
+            }
+
+            if (names == null || names.Count == 0)
+            {
+                names = new List<string> { "管理员", "工程师", "操作员" };
+            }
+
+            UserList.Clear();
+            foreach (var name in names)
+            {
+                UserList.Add(name);
+            }
+
+            if (string.IsNullOrEmpty(UserName) || UserName == "未登录" || !UserList.Contains(UserName))
+            {
+                UserName = UserList.FirstOrDefault() ?? "管理员";
+            }
+        }
+
+        public async void OnNavigatedTo(NavigationContext navigationContext)
+        {
+            await UpdateUserListAsync();
+        }
+
+        public bool IsNavigationTarget(NavigationContext navigationContext)
+        {
+            return true;
+        }
+
+        public void OnNavigatedFrom(NavigationContext navigationContext)
+        {
+        }
+    }
+}
