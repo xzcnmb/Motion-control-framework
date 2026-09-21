@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Concurrent;
 using Sophon.Common;
 using Sophon.Contracts;
 using Sophon.Core.Flow.V2;
@@ -8,13 +7,11 @@ using Sophon.Core.Flow.V2;
 namespace Sophon.Core
 {
     /// <summary>
-    /// 工站流程引擎工厂。生产路径只创建 v2 宿主（读 FlowGraphStore）。
-    /// 单元测试仍可通过 FakeFlowEngineFactory 注入 v1 线性步骤。
+    /// 每次按流程图名新建 v2 宿主，不按工站名缓存（多个工站可绑同一张图，但引擎实例不能共享）。
     /// </summary>
     [InjectableAttribute(DependencyLifetime.Singleton)]
     public class FlowEngineFactory : IFlowEngineFactory
     {
-        private readonly ConcurrentDictionary<string, IFlowEngine> _flowEngineCache = new(StringComparer.Ordinal);
         private readonly IMotionController? _motion;
         private readonly IIoController? _io;
 
@@ -33,8 +30,7 @@ namespace Sophon.Core
                 throw new ArgumentException("流程名不能为空", nameof(flowName));
             }
 
-            return _flowEngineCache.GetOrAdd(flowName, name =>
-                new FlowEngineV2Host(name, _motion, _io, EventBus.GetInstance()));
+            return new FlowEngineV2Host(flowName, _motion, _io, EventBus.GetInstance());
         }
     }
 }

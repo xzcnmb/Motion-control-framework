@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Windows;
 using HandyControl.Controls;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -14,18 +13,19 @@ using Sophon.Core.Flow.V2;
 namespace Sophon.UI.ViewModels
 {
     /// <summary>
-    /// 工站运行概览页视图模型：列出所有已保存流程对应的工站，
-    /// 支持启动 / 暂停 / 继续 / 停止，并实时订阅工站状态变更。
+    /// 工站页：工站是设备单元，流程图是配方。启动后循环跑绑定的配方，直到停止。
     /// </summary>
     public class StationViewModel : BindableBase, INavigationAware
     {
         private readonly IWorkStationFactory _workStationFactory;
         private readonly IWorkStationManager _workStationManager;
+        private readonly WorkStationProfileStore _profileStore;
 
-        /// <summary>已订阅状态事件的工站 → 处理器，用于退订防重复。</summary>
-        private readonly Dictionary<IWorkStation, Action<WorkStationState>> _handlers = new();
+        private readonly Dictionary<IWorkStation, Action<WorkStationState>> _stateHandlers = new();
+        private readonly Dictionary<IWorkStation, Action<int>> _cycleHandlers = new();
 
         public ObservableCollection<StationItemVm> Stations { get; } = new();
+        public ObservableCollection<string> AvailableFlows { get; } = new();
 
         private StationItemVm? _selectedStation;
         public StationItemVm? SelectedStation
@@ -35,9 +35,24 @@ namespace Sophon.UI.ViewModels
             {
                 if (SetProperty(ref _selectedStation, value))
                 {
+                    SyncBindSelection();
                     RaiseCanExecuteChanged();
                 }
             }
+        }
+
+        private string? _selectedFlowToBind;
+        public string? SelectedFlowToBind
+        {
+            get => _selectedFlowToBind;
+            set => SetProperty(ref _selectedFlowToBind, value);
+        }
+
+        private string _newStationName = string.Empty;
+        public string NewStationName
+        {
+            get => _newStationName;
+            set => SetProperty(ref _newStationName, value);
         }
 
         private string _statusMessage = "就绪";
@@ -52,17 +67,25 @@ namespace Sophon.UI.ViewModels
         public DelegateCommand PauseCommand { get; }
         public DelegateCommand ResumeCommand { get; }
         public DelegateCommand StopCommand { get; }
+        public DelegateCommand BindRecipeCommand { get; }
+        public DelegateCommand AddStationCommand { get; }
 
-        public StationViewModel(IWorkStationFactory workStationFactory, IWorkStationManager workStationManager)
+        public StationViewModel(
+            IWorkStationFactory workStationFactory,
+            IWorkStationManager workStationManager,
+            WorkStationProfileStore profileStore)
         {
             _workStationFactory = workStationFactory ?? throw new ArgumentNullException(nameof(workStationFactory));
             _workStationManager = workStationManager ?? throw new ArgumentNullException(nameof(workStationManager));
+            _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
 
-            RefreshCommand = new DelegateCommand(ExecuteRefresh);
+            RefreshCommand = new DelegateCommand(RefreshStations);
             StartCommand = new DelegateCommand(ExecuteStart, CanExecuteOnSelected);
             PauseCommand = new DelegateCommand(ExecutePause, CanExecuteOnSelected);
             ResumeCommand = new DelegateCommand(ExecuteResume, CanExecuteOnSelected);
             StopCommand = new DelegateCommand(ExecuteStop, CanExecuteOnSelected);
+            BindRecipeCommand = new DelegateCommand(ExecuteBind, CanExecuteOnSelected);
+            AddStationCommand = new DelegateCommand(ExecuteAddStation);
         }
 
         private bool CanExecuteOnSelected() => SelectedStation != null;
@@ -73,12 +96,10 @@ namespace Sophon.UI.ViewModels
             PauseCommand.RaiseCanExecuteChanged();
             ResumeCommand.RaiseCanExecuteChanged();
             StopCommand.RaiseCanExecuteChanged();
+            BindRecipeCommand.RaiseCanExecuteChanged();
         }
 
-        public void OnNavigatedTo(NavigationContext navigationContext)
-        {
-            RefreshStations();
-        }
+        public void OnNavigatedTo(NavigationContext navigationContext) => RefreshStations();
 
         public bool IsNavigationTarget(NavigationContext navigationContext) => true;
 
@@ -88,40 +109,51 @@ namespace Sophon.UI.ViewModels
             Stations.Clear();
         }
 
-        private void ExecuteRefresh()
-        {
-            RefreshStations();
-        }
-
         private void RefreshStations()
         {
             try
             {
-                // 1. 从已保存的 v2 流程图取流程名（启动后工站跑同一份 JSON，不再走 v1 线性步骤）
-                var flowNames = FlowGraphStore.ListFlowNames();
-
-                // 2. 确保每个流程都有对应工站（已存在则返回缓存）
-                foreach (var name in flowNames)
+                AvailableFlows.Clear();
+                foreach (var flow in FlowGraphStore.ListFlowNames().OrderBy(n => n, StringComparer.Ordinal))
                 {
-                    _workStationFactory.CreateWorkStation(name);
+                    AvailableFlows.Add(flow);
                 }
 
-                // 3. 先退订旧订阅，再重建列表，防止重复订阅
+                var profiles = _profileStore.LoadOrMigrateFromFlows();
+                foreach (var p in profiles)
+                {
+                    var station = _workStationFactory.CreateWorkStation(p.StationName);
+                    if (!string.IsNullOrWhiteSpace(p.BoundFlowName)
+                        && !string.Equals(station.BoundFlowName, p.BoundFlowName, StringComparison.Ordinal))
+                    {
+                        try
+                        {
+                            station.BindRecipe(p.BoundFlowName);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                        }
+                    }
+                }
+
                 UnsubscribeAll();
                 Stations.Clear();
 
-                // 4. 遍历工站缓存生成列表项，并订阅状态变更
                 foreach (var kv in _workStationFactory.WorkStationCache.OrderBy(k => k.Key, StringComparer.Ordinal))
                 {
-                    var vm = new StationItemVm(kv.Key, kv.Value.CurrentState);
+                    var vm = new StationItemVm(kv.Value);
                     Stations.Add(vm);
 
-                    Action<WorkStationState> handler = state => OnStationStateChanged(kv.Value, state);
-                    kv.Value.StateChanged += handler;
-                    _handlers[kv.Value] = handler;
+                    Action<WorkStationState> onState = state => OnStationStateChanged(kv.Value, state);
+                    Action<int> onCycle = n => OnCycleCompleted(kv.Value, n);
+                    kv.Value.StateChanged += onState;
+                    kv.Value.CycleCompleted += onCycle;
+                    _stateHandlers[kv.Value] = onState;
+                    _cycleHandlers[kv.Value] = onCycle;
                 }
 
-                StatusMessage = $"已加载 {Stations.Count} 个工站（流程来源：SophonData/flows）";
+                StatusMessage = $"工站 {Stations.Count} 个，流程图 {AvailableFlows.Count} 张。启动后循环跑绑定配方，点停止才结束。";
+                SyncBindSelection();
             }
             catch (Exception ex)
             {
@@ -130,37 +162,126 @@ namespace Sophon.UI.ViewModels
             }
         }
 
-        private void UnsubscribeAll()
+        private void SyncBindSelection()
         {
-            foreach (var kv in _handlers)
-            {
-                kv.Key.StateChanged -= kv.Value;
-            }
-            _handlers.Clear();
-        }
-
-        private void OnStationStateChanged(IWorkStation station, WorkStationState state)
-        {
-            var vm = Stations.FirstOrDefault(x => x.Name == station.WorkStationName);
-            if (vm == null)
+            if (SelectedStation == null)
             {
                 return;
             }
 
-            // 工站状态变更可能来自线程池线程（流程完成/异常），必须切回 UI 线程更新
+            SelectedFlowToBind = AvailableFlows.FirstOrDefault(f =>
+                string.Equals(f, SelectedStation.BoundFlowName, StringComparison.Ordinal))
+                ?? SelectedStation.BoundFlowName;
+        }
+
+        private void UnsubscribeAll()
+        {
+            foreach (var kv in _stateHandlers)
+            {
+                kv.Key.StateChanged -= kv.Value;
+            }
+            foreach (var kv in _cycleHandlers)
+            {
+                kv.Key.CycleCompleted -= kv.Value;
+            }
+            _stateHandlers.Clear();
+            _cycleHandlers.Clear();
+        }
+
+        private void OnStationStateChanged(IWorkStation station, WorkStationState state)
+        {
+            RunOnUi(() =>
+            {
+                Stations.FirstOrDefault(x => x.Name == station.WorkStationName)?.RefreshFrom(station);
+                RaiseCanExecuteChanged();
+            });
+        }
+
+        private void OnCycleCompleted(IWorkStation station, int cycle)
+        {
+            RunOnUi(() => Stations.FirstOrDefault(x => x.Name == station.WorkStationName)?.RefreshFrom(station));
+        }
+
+        private static void RunOnUi(Action action)
+        {
             var dispatcher = System.Windows.Application.Current?.Dispatcher;
             if (dispatcher == null || dispatcher.CheckAccess())
             {
-                vm.UpdateState(state);
-                RaiseCanExecuteChanged();
+                action();
             }
             else
             {
-                dispatcher.Invoke(() =>
+                dispatcher.Invoke(action);
+            }
+        }
+
+        private void ExecuteAddStation()
+        {
+            string name = (NewStationName ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                Growl.Warning("请先填写工站名称");
+                return;
+            }
+
+            if (_workStationFactory.WorkStationCache.ContainsKey(name))
+            {
+                Growl.Warning($"工站「{name}」已存在");
+                return;
+            }
+
+            string flow = SelectedFlowToBind ?? AvailableFlows.FirstOrDefault() ?? string.Empty;
+            _profileStore.Upsert(new WorkStationProfile
+            {
+                StationName = name,
+                BoundFlowName = flow,
+                LoopRecipe = true
+            });
+            _workStationFactory.CreateWorkStation(name);
+            if (!string.IsNullOrEmpty(flow))
+            {
+                _workStationFactory.WorkStationCache[name].BindRecipe(flow);
+            }
+            NewStationName = string.Empty;
+            RefreshStations();
+            Growl.Success($"已添加工站「{name}」，配方：{(string.IsNullOrEmpty(flow) ? "未绑定" : flow)}");
+        }
+
+        private void ExecuteBind()
+        {
+            var item = SelectedStation;
+            if (item == null)
+            {
+                return;
+            }
+
+            string flow = (SelectedFlowToBind ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(flow))
+            {
+                Growl.Warning("请选择要绑定的流程图");
+                return;
+            }
+
+            try
+            {
+                if (!_workStationFactory.WorkStationCache.TryGetValue(item.Name, out var station))
                 {
-                    vm.UpdateState(state);
-                    RaiseCanExecuteChanged();
+                    return;
+                }
+
+                station.BindRecipe(flow);
+                _profileStore.Upsert(new WorkStationProfile
+                {
+                    StationName = station.WorkStationName,
+                    BoundFlowName = flow,
+                    LoopRecipe = true
                 });
+                item.RefreshFrom(station);
+                Growl.Success($"工站「{item.Name}」已绑定配方「{flow}」。启动后将循环执行该流程。");
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"绑定失败: {ex.Message}");
             }
         }
 
@@ -174,8 +295,15 @@ namespace Sophon.UI.ViewModels
 
             try
             {
+                if (_workStationFactory.WorkStationCache.TryGetValue(name, out var station)
+                    && string.IsNullOrWhiteSpace(station.BoundFlowName))
+                {
+                    Growl.Warning($"工站「{name}」还没有绑定流程图，请先选择配方。");
+                    return;
+                }
+
                 _workStationManager.Start(name);
-                Growl.Info($"工站「{name}」已启动");
+                Growl.Info($"工站「{name}」已启动，循环执行配方「{SelectedStation?.BoundFlowName}」，点停止结束。");
             }
             catch (Exception ex)
             {
@@ -200,7 +328,7 @@ namespace Sophon.UI.ViewModels
                     return;
                 }
                 _workStationManager.Pause(name);
-                Growl.Info($"工站「{name}」已暂停");
+                Growl.Info($"工站「{name}」已暂停（节点边界）");
             }
             catch (Exception ex)
             {
@@ -220,7 +348,7 @@ namespace Sophon.UI.ViewModels
             try
             {
                 _workStationManager.Resume(name);
-                Growl.Info($"工站「{name}」已继续");
+                Growl.Info($"工站「{name}」已继续循环");
             }
             catch (Exception ex)
             {
@@ -240,7 +368,7 @@ namespace Sophon.UI.ViewModels
             try
             {
                 _workStationManager.Stop(name);
-                Growl.Info($"工站「{name}」已停止");
+                Growl.Info($"工站「{name}」已停止循环");
             }
             catch (Exception ex)
             {
@@ -258,14 +386,11 @@ namespace Sophon.UI.ViewModels
             }
             if (_workStationFactory.WorkStationCache.TryGetValue(selected.Name, out var station))
             {
-                selected.UpdateState(station.CurrentState);
+                selected.RefreshFrom(station);
             }
         }
     }
 
-    /// <summary>
-    /// 工站列表项：名称 + 状态中文文案 + 状态颜色。
-    /// </summary>
     public class StationItemVm : BindableBase
     {
         public string Name { get; }
@@ -284,11 +409,34 @@ namespace Sophon.UI.ViewModels
             }
         }
 
+        private string _boundFlowName = string.Empty;
+        public string BoundFlowName
+        {
+            get => _boundFlowName;
+            private set
+            {
+                if (SetProperty(ref _boundFlowName, value))
+                {
+                    RaisePropertyChanged(nameof(RecipeText));
+                }
+            }
+        }
+
+        private int _cycleCount;
+        public int CycleCount
+        {
+            get => _cycleCount;
+            private set => SetProperty(ref _cycleCount, value);
+        }
+
+        public string RecipeText => string.IsNullOrWhiteSpace(BoundFlowName) ? "未绑定配方" : BoundFlowName;
+
         public string StateText => State switch
         {
             WorkStationState.Idle => "空闲",
-            WorkStationState.Running => "运行",
+            WorkStationState.Running => "循环运行",
             WorkStationState.Paused => "暂停",
+            WorkStationState.Stopped => "已停止",
             WorkStationState.Alarm => "报警",
             _ => State.ToString()
         };
@@ -298,15 +446,21 @@ namespace Sophon.UI.ViewModels
             WorkStationState.Running => "#52C41A",
             WorkStationState.Paused => "#FAAD14",
             WorkStationState.Alarm => "#FF4D4F",
+            WorkStationState.Stopped => "#8C8C8C",
             _ => "#8C8C8C"
         };
 
-        public StationItemVm(string name, WorkStationState state = WorkStationState.Idle)
+        public StationItemVm(IWorkStation station)
         {
-            Name = name;
-            _state = state;
+            Name = station.WorkStationName;
+            RefreshFrom(station);
         }
 
-        public void UpdateState(WorkStationState state) => State = state;
+        public void RefreshFrom(IWorkStation station)
+        {
+            State = station.CurrentState;
+            BoundFlowName = station.BoundFlowName;
+            CycleCount = station.CycleCount;
+        }
     }
 }

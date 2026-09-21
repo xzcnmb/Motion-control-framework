@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,16 +6,26 @@ using System.Threading.Tasks;
 namespace Sophon.Core
 {
     /// <summary>
-    /// 工站（ISA-88 Unit）：配方阶段由流程引擎执行。
-    /// 生产路径是 v2 节点图（FlowEngineV2Host）；测试可注入 v1 线性 IFlowStep。
-    /// 暂停挂在节点/步骤边界；停止 = 工站 CTS；异常不逃逸。
+    /// 工站（ISA-88 Unit / PackML 设备）：绑定一张配方图，Start 进入 Execute 循环，直到 Stop。
+    /// 暂停挂在节点/步骤边界；停止 = 工站 CTS；异常进 Alarm，不继续下一圈。
     /// </summary>
     public class WorkStation : IWorkStation
     {
-        public WorkStation(string workStationName, IFlowEngineFactory flowEngineFactory, IFlowContextFactory flowContextFactory, IStateMachine stateMachine)
+        public WorkStation(
+            string workStationName,
+            IFlowEngineFactory flowEngineFactory,
+            IFlowContextFactory flowContextFactory,
+            IStateMachine stateMachine,
+            WorkStationOptions? options = null)
         {
             WorkStationName = workStationName;
-            _flowEngine = flowEngineFactory.CreateFlowEngine(WorkStationName);
+            _flowEngineFactory = flowEngineFactory;
+            _options = options ?? WorkStationOptions.Cyclic(workStationName);
+            BoundFlowName = string.IsNullOrWhiteSpace(_options.BoundFlowName)
+                ? workStationName
+                : _options.BoundFlowName!;
+            LoopRecipe = _options.LoopRecipe;
+            _flowEngine = flowEngineFactory.CreateFlowEngine(BoundFlowName);
             _flowController = _flowEngine as IFlowController;
             _flowContext = flowContextFactory.CreateFlowContext(WorkStationName);
             _stateMachine = stateMachine;
@@ -23,15 +33,43 @@ namespace Sophon.Core
         }
 
         public string WorkStationName { get; }
+        public string BoundFlowName { get; private set; }
+        public bool LoopRecipe { get; }
+        public int CycleCount { get; private set; }
         public WorkStationState CurrentState => _stateMachine.CurrentState;
         public event Action<WorkStationState>? StateChanged;
+        public event Action<int>? CycleCompleted;
 
-        private readonly IFlowEngine _flowEngine;
-        private readonly IFlowController? _flowController;
+        private readonly IFlowEngineFactory _flowEngineFactory;
+        private readonly WorkStationOptions _options;
+        private IFlowEngine _flowEngine;
+        private IFlowController? _flowController;
         private readonly IFlowContext _flowContext;
         private readonly IStateMachine _stateMachine;
         private CancellationTokenSource? _cts;
         private readonly object _lock = new object();
+
+        public void BindRecipe(string flowName)
+        {
+            if (string.IsNullOrWhiteSpace(flowName))
+            {
+                throw new ArgumentException("流程图名不能为空", nameof(flowName));
+            }
+
+            lock (_lock)
+            {
+                var s = _stateMachine.CurrentState;
+                if (s == WorkStationState.Running || s == WorkStationState.Paused)
+                {
+                    throw new InvalidOperationException($"工站「{WorkStationName}」正在运行，不能更换配方。请先停止。");
+                }
+
+                BoundFlowName = flowName.Trim();
+                _flowEngine = _flowEngineFactory.CreateFlowEngine(BoundFlowName);
+                _flowController = _flowEngine as IFlowController;
+                _flowContext.Logger.Info($"工站{WorkStationName} 绑定配方「{BoundFlowName}」");
+            }
+        }
 
         public void Start()
         {
@@ -44,12 +82,11 @@ namespace Sophon.Core
                 }
                 _cts?.Dispose();
                 _cts = new CancellationTokenSource();
+                CycleCount = 0;
                 _stateMachine.SetState(WorkStationState.Running);
             }
 
             var cts = _cts;
-            // 显式调度到线程池：引擎执行期间可能出现同步阻塞步骤（如等待门控/IO），
-            // 绝不能占用调用线程（UI 线程或测试线程），否则调用方无法再发出 Pause/Stop
             _ = Task.Run(async () => await RunWorkAsync(cts!).ConfigureAwait(false));
         }
 
@@ -57,10 +94,37 @@ namespace Sophon.Core
         {
             try
             {
-                await _flowEngine.RunAsync(_flowContext, cts.Token).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(BoundFlowName))
+                {
+                    throw new InvalidOperationException(
+                        $"工站「{WorkStationName}」未绑定流程图。请在工站页选择配方后再启动。");
+                }
 
-                // 流程结束（正常完成或被停止）：仅在仍处于 Running/Paused 时回到 Idle，
-                // 不覆盖 Stop 后的 Stopped 或失败后的 Alarm
+                while (!cts.IsCancellationRequested)
+                {
+                    _flowContext.Logger.Info(
+                        $"工站{WorkStationName} 第 {CycleCount + 1} 次执行配方「{BoundFlowName}」");
+                    await _flowEngine.RunAsync(_flowContext, cts.Token).ConfigureAwait(false);
+
+                    if (cts.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    int n;
+                    lock (_lock)
+                    {
+                        CycleCount++;
+                        n = CycleCount;
+                    }
+                    CycleCompleted?.Invoke(n);
+
+                    if (!LoopRecipe)
+                    {
+                        break;
+                    }
+                }
+
                 lock (_lock)
                 {
                     var s = _stateMachine.CurrentState;
@@ -76,7 +140,6 @@ namespace Sophon.Core
             }
             catch (Exception e)
             {
-                // 步骤失败/引擎异常的唯一下落：Alarm（保留可复位路径）
                 _flowContext.Logger.Error($"工站{WorkStationName}运行异常：{e.Message}");
                 lock (_lock)
                 {

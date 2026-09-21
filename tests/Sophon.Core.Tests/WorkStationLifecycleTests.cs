@@ -20,7 +20,8 @@ namespace Sophon.Core.Tests
                 "TestStation",
                 new FakeFlowEngineFactory(stepList.ToList()),
                 new FakeFlowContextFactory(),
-                new StateMachine());
+                new StateMachine(),
+                WorkStationOptions.SingleShot);
         }
 
         [Fact]
