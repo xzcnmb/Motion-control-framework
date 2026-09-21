@@ -6,12 +6,9 @@ using System.Threading.Tasks;
 namespace Sophon.Core
 {
     /// <summary>
-    /// 工站：流程引擎 + 状态机的宿主。
-    /// 生命周期设计要点（评审修复）：
-    /// - 异常绝不逃逸到后台线程：RunWork 内部全捕获，状态统一在 await 之后设置；
-    /// - 步骤失败 → Alarm（且 Alarm 具备 Reset 复位路径）；正常完成 → Idle；
-    /// - Stop 由工站持有的 CTS 单点取消，Idle 态 Stop 为无操作；
-    /// - 不再向外部暴露裸 CTS。
+    /// 工站（ISA-88 Unit）：配方阶段由流程引擎执行。
+    /// 生产路径是 v2 节点图（FlowEngineV2Host）；测试可注入 v1 线性 IFlowStep。
+    /// 暂停挂在节点/步骤边界；停止 = 工站 CTS；异常不逃逸。
     /// </summary>
     public class WorkStation : IWorkStation
     {
