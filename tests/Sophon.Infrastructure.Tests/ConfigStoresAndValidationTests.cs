@@ -341,5 +341,82 @@ namespace Sophon.Infrastructure.Tests
             Assert.Equal(0.0, PlatformParamMapper.ToAccelParam(500, 0, pLead));
             Assert.Equal(0.0, PlatformParamMapper.ToAccelParam(500, -10, pLead));
         }
+
+        [Fact]
+        public void MotionCardCatalog_SeparatesPulseAndBus_And_DoesNotMixLeadShineApis()
+        {
+            var pulse = MotionCardCatalog.Find("DMC5810");
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            Assert.NotNull(pulse);
+            Assert.NotNull(bus);
+            Assert.Equal(MotionVendor.LeadShine, pulse!.Vendor);
+            Assert.Equal(MotionVendor.LeadShine, bus!.Vendor);
+            Assert.Equal(MotionCommandInterface.Pulse, pulse.CommandInterface);
+            Assert.Equal(MotionCommandInterface.EtherCAT, bus.CommandInterface);
+            Assert.Equal(DriverKind.LeadShineDmc, pulse.Driver);
+            Assert.Equal(DriverKind.LeadShineEtherCAT, bus.Driver);
+            Assert.Equal(AccelParamKind.AccelerationTime, pulse.Accel);
+            Assert.Equal(AccelParamKind.AccelerationValue, bus.Accel);
+            Assert.True(pulse.IsImplemented);
+            Assert.False(bus.IsImplemented);
+            Assert.Equal("LTDMC.dll", pulse.NativeLibrary);
+            Assert.DoesNotContain("LTDMC.dll", bus.NativeLibrary, StringComparison.OrdinalIgnoreCase);
+
+            var gts = MotionCardCatalog.Find("GTS-400");
+            var gen = MotionCardCatalog.Find("GEN-1000-16");
+            Assert.NotNull(gts);
+            Assert.NotNull(gen);
+            Assert.Equal(DriverKind.GoogolGts, gts!.Driver);
+            Assert.Equal(DriverKind.GoogolGen, gen!.Driver);
+            Assert.True(gts.RequiresConfigFile);
+            Assert.False(gen.RequiresConfigFile);
+        }
+
+        [Fact]
+        public void MotionProfileValidator_RejectsEtherCATCard_And_AxisCountOverModelLimit()
+        {
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            Assert.NotNull(bus);
+            var pBus = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            pBus.ApplyModel(bus!);
+            var errsBus = MotionProfileValidator.Validate(pBus);
+            Assert.Contains(errsBus, e => e.Contains("EtherCAT") && e.Contains("脉冲卡"));
+
+            var pulse = MotionCardCatalog.Find("DMC1020");
+            Assert.NotNull(pulse);
+            var pTooMany = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 },
+                    new() { AxisId = 1, Name = "Y", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 },
+                    new() { AxisId = 2, Name = "Z", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            pTooMany.ApplyModel(pulse!);
+            var errsCount = MotionProfileValidator.Validate(pTooMany);
+            Assert.Contains(errsCount, e => e.Contains("最多 2 轴"));
+        }
+
+        [Fact]
+        public void DefaultPlatformFor_UsesCatalogModel_NotBrandAlone()
+        {
+            var dmcPulse = MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineDmc, "DMC5810");
+            var dmcBus = MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineEtherCAT, "DMC-E5032");
+            Assert.Equal(AccelParamKind.AccelerationTime, dmcPulse.Accel);
+            Assert.False(dmcPulse.UsesConnectionString);
+            Assert.Equal(AccelParamKind.AccelerationValue, dmcBus.Accel);
+
+            var gts = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts, "GTS-400");
+            var gen = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGen, "GEN-1000-16");
+            Assert.True(gts.RequiresConfigFile);
+            Assert.False(gen.RequiresConfigFile);
+        }
     }
 }

@@ -61,14 +61,21 @@ namespace Sophon.Infrastructure.Motion.Drivers
                     }
                     catch (Exception ex)
                     {
-                        logger?.Invoke($"[MotionControllerFactory] 创建雷赛 DMC 控制器失败: {ex.Message}");
+                        logger?.Invoke($"[MotionControllerFactory] 创建雷赛 DMC 脉冲卡控制器失败: {ex.Message}");
                         if (allowSimFallback)
                         {
                             logger?.Invoke("[MotionControllerFactory] 警告：已显式允许降级到仿真控制器 (allowSimFallback = true)！");
                             return new SimMotionController(axes, timeSource, ioController);
                         }
-                        throw new InvalidOperationException($"创建雷赛 DMC 控制器失败，未允许降级到仿真 (NeverSilentlyFallbackToSim): {ex.Message}", ex);
+                        throw new InvalidOperationException($"创建雷赛 DMC 脉冲卡控制器失败，未允许降级到仿真 (NeverSilentlyFallbackToSim): {ex.Message}", ex);
                     }
+
+                case DriverKind.GoogolGen:
+                case DriverKind.GoogolGe:
+                case DriverKind.LeadShineEtherCAT:
+                case DriverKind.ZmotionZmc:
+                case DriverKind.ZmotionEtherCAT:
+                    throw new NotSupportedException(MotionCardCatalog.NotImplementedMessage(kind));
 
                 default:
                     throw new NotSupportedException($"不支持的运动控制器驱动类型: {kind}");

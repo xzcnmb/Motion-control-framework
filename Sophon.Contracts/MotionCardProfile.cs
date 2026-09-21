@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Sophon.Contracts
@@ -13,10 +14,19 @@ namespace Sophon.Contracts
         /// <summary>档案名称（界面显示、多套配置切换用）。</summary>
         public string ProfileName { get; set; } = "默认配置";
 
-        /// <summary>目标驱动/平台类型。</summary>
+        /// <summary>目标驱动/平台类型。由选型目录按型号写入，不要手填成总线卡再走脉冲 DLL。</summary>
         public DriverKind Driver { get; set; } = DriverKind.Simulated;
 
-        /// <summary>控制卡显示型号（如 "GTS-400-PCIe" / "DMC5800" / "ZMC406"）。</summary>
+        /// <summary>厂商。与 <see cref="CardModel"/> 一起决定走哪套 SDK。</summary>
+        public MotionVendor Vendor { get; set; } = MotionVendor.Simulated;
+
+        /// <summary>脉冲 / 模拟量 / EtherCAT / gLink。雷赛 DMC 脉冲卡与 DMC-E 总线卡必须分开。</summary>
+        public MotionCommandInterface CommandInterface { get; set; } = MotionCommandInterface.Pulse;
+
+        /// <summary>产品系列（如 DMC5000、DMC-E5000、GTS-VB、GEN）。</summary>
+        public string Series { get; set; } = string.Empty;
+
+        /// <summary>控制卡型号（目录主键，如 "GTS-400" / "DMC5810" / "DMC-E5032"）。</summary>
         public string CardModel { get; set; } = string.Empty;
 
         /// <summary>
@@ -45,40 +55,78 @@ namespace Sophon.Contracts
         public PlatformOptions Platform { get; set; } = new();
 
         /// <summary>
-        /// 依据 <see cref="Driver"/> 返回该平台的默认差异选项。UI 新建档案时用以预填。
+        /// 把目录里的型号写进档案：驱动、接口、系列、平台选项一并带上，避免脉冲/总线混用。
         /// </summary>
-        public static PlatformOptions DefaultPlatformFor(DriverKind driver) => driver switch
+        public void ApplyModel(MotionCardModelDescriptor model)
         {
-            DriverKind.GoogolGts => new PlatformOptions
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            Vendor = model.Vendor;
+            CommandInterface = model.CommandInterface;
+            Series = model.Series;
+            CardModel = model.Model;
+            Driver = model.Driver;
+            Platform = model.CreatePlatform();
+        }
+
+        /// <summary>
+        /// 优先按型号从目录取平台选项；旧档案没有型号时退回按驱动种类。
+        /// </summary>
+        public static PlatformOptions DefaultPlatformFor(DriverKind driver, string? cardModel = null)
+        {
+            var byModel = MotionCardCatalog.Find(cardModel);
+            if (byModel != null)
             {
-                AxisIndexBase = 1,
-                Accel = AccelParamKind.AccelerationValue,
-                RequiresConfigFile = true,
-                SupportsBufferedSegments = true,
-            },
-            DriverKind.LeadShineDmc => new PlatformOptions
+                return byModel.CreatePlatform();
+            }
+
+            var byDriver = MotionCardCatalog.FindByDriver(driver);
+            if (byDriver != null)
             {
-                AxisIndexBase = 1,
-                Accel = AccelParamKind.AccelerationTime,
-                RequiresConfigFile = false,
-                SupportsBufferedSegments = true,
-            },
-            DriverKind.ZmotionZmc => new PlatformOptions
+                return byDriver.CreatePlatform();
+            }
+
+            return driver switch
             {
-                AxisIndexBase = 0,
-                Accel = AccelParamKind.AccelerationValue,
-                RequiresConfigFile = false,
-                SupportsBufferedSegments = true,
-                UsesConnectionString = true,
-            },
-            _ => new PlatformOptions
-            {
-                AxisIndexBase = 0,
-                Accel = AccelParamKind.AccelerationValue,
-                RequiresConfigFile = false,
-                SupportsBufferedSegments = false,
-            },
-        };
+                DriverKind.GoogolGts => new PlatformOptions
+                {
+                    AxisIndexBase = 1,
+                    Accel = AccelParamKind.AccelerationValue,
+                    RequiresConfigFile = true,
+                    SupportsBufferedSegments = true,
+                },
+                DriverKind.LeadShineDmc => new PlatformOptions
+                {
+                    AxisIndexBase = 1,
+                    Accel = AccelParamKind.AccelerationTime,
+                    RequiresConfigFile = false,
+                    SupportsBufferedSegments = true,
+                },
+                DriverKind.ZmotionZmc => new PlatformOptions
+                {
+                    AxisIndexBase = 0,
+                    Accel = AccelParamKind.AccelerationValue,
+                    RequiresConfigFile = false,
+                    SupportsBufferedSegments = true,
+                    UsesConnectionString = true,
+                },
+                DriverKind.LeadShineEtherCAT or DriverKind.GoogolGen or DriverKind.GoogolGe or DriverKind.ZmotionEtherCAT
+                    => new PlatformOptions
+                    {
+                        AxisIndexBase = 0,
+                        Accel = AccelParamKind.AccelerationValue,
+                        RequiresConfigFile = false,
+                        SupportsBufferedSegments = true,
+                        UsesConnectionString = driver is DriverKind.LeadShineEtherCAT or DriverKind.ZmotionEtherCAT,
+                    },
+                _ => new PlatformOptions
+                {
+                    AxisIndexBase = 0,
+                    Accel = AccelParamKind.AccelerationValue,
+                    RequiresConfigFile = false,
+                    SupportsBufferedSegments = false,
+                },
+            };
+        }
     }
 
     /// <summary>

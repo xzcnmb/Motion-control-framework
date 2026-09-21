@@ -11,10 +11,8 @@ using Sophon.Infrastructure.Motion.Drivers.Native;
 namespace Sophon.Infrastructure.Motion.Drivers
 {
     /// <summary>
-    /// 雷赛 DMC 系列运动控制卡适配器骨架实现。
-    /// 【注意】：本类所有硬件调用点未经真机验证（IsFieldVerified = false）。
-    /// 【诚实性铁律】驱动 DLL 缺失/调用失败时：连接失败置 Fault 并抛异常；运动命令回报失败；
-    /// 绝不静默仿真假成功（评审 Critical #4）。无卡调试请显式使用 SimMotionController。
+    /// 雷赛 DMC 脉冲卡适配器骨架（LTDMC.dll）。DMC-E / EMC / PAC 总线卡不要走这里。
+    /// 未经真机验证。DLL 缺失必须失败可见，禁止假装成功。
     /// </summary>
     public class LeadShineDmcMotionController : IMotionController, IVerifiedDriver
     {

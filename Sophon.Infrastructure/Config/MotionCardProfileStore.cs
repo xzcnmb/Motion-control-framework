@@ -191,14 +191,15 @@ namespace Sophon.Infrastructure.Config
             var profile = new MotionCardProfile
             {
                 ProfileName = "默认配置",
-                Driver = DriverKind.GoogolGts,
-                CardModel = "GTS-400",
                 CardNo = 0,
                 ConnectionString = null,
                 ConfigFilePath = null,
-                Platform = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts),
-                Axes = new List<AxisDefinition>
-                {
+            };
+            var gts400 = MotionCardCatalog.Find("GTS-400")
+                         ?? throw new InvalidOperationException("选型目录缺少 GTS-400。");
+            profile.ApplyModel(gts400);
+            profile.Axes = new List<AxisDefinition>
+            {
                     new()
                     {
                         AxisId = 0,
@@ -287,7 +288,6 @@ namespace Sophon.Infrastructure.Config
                         HomeDir = HomeDirection.Negative,
                         HomeSpeed = 36
                     }
-                }
             };
 
             return new List<MotionCardProfile> { profile };

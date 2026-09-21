@@ -45,8 +45,13 @@ namespace Sophon.UI.ViewModels
 
         public string DriverKindName => _motionController?.Kind switch
         {
-            DriverKind.GoogolGts => "固高 GTS 运动控制卡",
-            DriverKind.LeadShineDmc => "雷赛 DMC 运动控制卡",
+            DriverKind.GoogolGts => "固高 GTS 脉冲/模拟量卡",
+            DriverKind.LeadShineDmc => "雷赛 DMC 脉冲卡",
+            DriverKind.GoogolGen => "固高 GEN EtherCAT（未接入）",
+            DriverKind.GoogolGe => "固高 GE gLink-II（未接入）",
+            DriverKind.LeadShineEtherCAT => "雷赛 EtherCAT 总线卡（未接入）",
+            DriverKind.ZmotionZmc => "正运动脉冲控制器（未接入）",
+            DriverKind.ZmotionEtherCAT => "正运动 EtherCAT（未接入）",
             _ => "未连接控制卡"
         };
 

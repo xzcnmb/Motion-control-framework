@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using HandyControl.Controls;
 using Prism.Commands;
@@ -14,10 +13,24 @@ using Sophon.Infrastructure.Motion.Axis;
 
 namespace Sophon.UI.ViewModels
 {
+    public sealed class CatalogOption<T>
+    {
+        public CatalogOption(T value, string display)
+        {
+            Value = value;
+            Display = display;
+        }
+
+        public T Value { get; }
+        public string Display { get; }
+        public override string ToString() => Display;
+    }
+
     public class MotionCardConfigViewModel : BindableBase, INavigationAware
     {
         private readonly MotionCardProfileStore _store;
         private readonly AxisManager? _axisManager;
+        private bool _syncing;
 
         public ObservableCollection<MotionCardProfile> Profiles { get; } = new();
 
@@ -43,12 +56,67 @@ namespace Sophon.UI.ViewModels
 
         public ObservableCollection<AxisDefinition> Axes { get; } = new();
 
-        public DriverKind[] DriverKinds { get; } =
+        public ObservableCollection<CatalogOption<MotionVendor>> VendorOptions { get; } = new();
+        public ObservableCollection<CatalogOption<MotionCommandInterface>> InterfaceOptions { get; } = new();
+        public ObservableCollection<CatalogOption<string>> SeriesOptions { get; } = new();
+        public ObservableCollection<MotionCardModelDescriptor> ModelOptions { get; } = new();
+
+        private CatalogOption<MotionVendor>? _selectedVendor;
+        public CatalogOption<MotionVendor>? SelectedVendor
         {
-            DriverKind.GoogolGts,
-            DriverKind.LeadShineDmc
-        };
-        public Array AccelKinds => Enum.GetValues(typeof(AccelParamKind));
+            get => _selectedVendor;
+            set
+            {
+                if (SetProperty(ref _selectedVendor, value) && !_syncing)
+                {
+                    RebuildInterfaces(selectFirst: true);
+                }
+            }
+        }
+
+        private CatalogOption<MotionCommandInterface>? _selectedInterface;
+        public CatalogOption<MotionCommandInterface>? SelectedInterface
+        {
+            get => _selectedInterface;
+            set
+            {
+                if (SetProperty(ref _selectedInterface, value) && !_syncing)
+                {
+                    RebuildSeries(selectFirst: true);
+                }
+            }
+        }
+
+        private CatalogOption<string>? _selectedSeries;
+        public CatalogOption<string>? SelectedSeries
+        {
+            get => _selectedSeries;
+            set
+            {
+                if (SetProperty(ref _selectedSeries, value) && !_syncing)
+                {
+                    RebuildModels(selectFirst: true);
+                }
+            }
+        }
+
+        private MotionCardModelDescriptor? _selectedModel;
+        public MotionCardModelDescriptor? SelectedModel
+        {
+            get => _selectedModel;
+            set
+            {
+                if (SetProperty(ref _selectedModel, value))
+                {
+                    if (!_syncing)
+                    {
+                        ApplySelectedModel();
+                    }
+                    RaiseModelHints();
+                }
+            }
+        }
+
         public Array HomingModes => Enum.GetValues(typeof(HomingMode));
         public Array HomeDirections => Enum.GetValues(typeof(HomeDirection));
 
@@ -66,6 +134,31 @@ namespace Sophon.UI.ViewModels
             set => SetProperty(ref _validationColor, value);
         }
 
+        private string _platformHint = string.Empty;
+        public string PlatformHint
+        {
+            get => _platformHint;
+            set => SetProperty(ref _platformHint, value);
+        }
+
+        private string _adapterWarning = string.Empty;
+        public string AdapterWarning
+        {
+            get => _adapterWarning;
+            set => SetProperty(ref _adapterWarning, value);
+        }
+
+        public bool ShowAdapterWarning => !string.IsNullOrEmpty(AdapterWarning);
+        public bool ShowConnectionString => SelectedModel?.UsesConnectionString == true;
+        public bool ShowConfigFile => SelectedModel?.RequiresConfigFile == true;
+        public string ConnectionStringLabel => SelectedModel?.HostLink == MotionHostLink.Ethernet
+            ? "控制器 IP / 连接字符串"
+            : "连接字符串";
+        public string ConfigFileLabel => "配置文件路径（固高 GTS 的 *.cfg）";
+        public string NativeLibraryText => SelectedModel == null
+            ? string.Empty
+            : $"SDK：{SelectedModel.NativeLibrary}　主机接口：{MotionCardCatalog.Display(SelectedModel.HostLink)}　最多 {SelectedModel.MaxAxes} 轴";
+
         public ObservableCollection<string> ValidationMessages { get; } = new();
 
         public DelegateCommand AddProfileCommand { get; }
@@ -75,7 +168,6 @@ namespace Sophon.UI.ViewModels
         public DelegateCommand ValidateCommand { get; }
         public DelegateCommand SaveAndApplyCommand { get; }
         public DelegateCommand SetAsActiveCommand { get; }
-        public DelegateCommand DriverChangedCommand { get; }
 
         public MotionCardConfigViewModel(AxisManager? axisManager = null)
         {
@@ -89,7 +181,11 @@ namespace Sophon.UI.ViewModels
             ValidateCommand = new DelegateCommand(OnValidate);
             SaveAndApplyCommand = new DelegateCommand(OnSaveAndApply);
             SetAsActiveCommand = new DelegateCommand(OnSetAsActive, () => SelectedProfile != null).ObservesProperty(() => SelectedProfile);
-            DriverChangedCommand = new DelegateCommand(OnDriverChanged);
+
+            foreach (var vendor in MotionCardCatalog.Vendors)
+            {
+                VendorOptions.Add(new CatalogOption<MotionVendor>(vendor, MotionCardCatalog.Display(vendor)));
+            }
 
             LoadProfiles();
         }
@@ -125,17 +221,149 @@ namespace Sophon.UI.ViewModels
                 }
                 SelectedAxis = Axes.FirstOrDefault();
             }
+            SyncCascadeFromProfile();
             OnValidate();
         }
 
-        private void OnDriverChanged()
+        private void SyncCascadeFromProfile()
         {
-            if (SelectedProfile != null)
+            _syncing = true;
+            try
             {
-                SelectedProfile.Platform = MotionCardProfile.DefaultPlatformFor(SelectedProfile.Driver);
-                RaisePropertyChanged(nameof(SelectedProfile));
-                OnValidate();
+                var profile = SelectedProfile;
+                var desc = MotionCardCatalog.Resolve(profile);
+                MotionVendor vendor = desc?.Vendor
+                    ?? (profile != null && profile.Vendor != MotionVendor.Simulated ? profile.Vendor : MotionVendor.Googol);
+
+                SelectedVendor = VendorOptions.FirstOrDefault(v => v.Value == vendor)
+                                 ?? VendorOptions.FirstOrDefault();
+                RebuildInterfaces(selectFirst: false);
+
+                MotionCommandInterface iface = desc?.CommandInterface
+                    ?? profile?.CommandInterface
+                    ?? MotionCommandInterface.Pulse;
+                SelectedInterface = InterfaceOptions.FirstOrDefault(i => i.Value == iface)
+                                    ?? InterfaceOptions.FirstOrDefault();
+                RebuildSeries(selectFirst: false);
+
+                string series = desc?.Series ?? profile?.Series ?? string.Empty;
+                SelectedSeries = SeriesOptions.FirstOrDefault(s => string.Equals(s.Value, series, StringComparison.OrdinalIgnoreCase))
+                                 ?? SeriesOptions.FirstOrDefault();
+                RebuildModels(selectFirst: false);
+
+                SelectedModel = desc != null
+                    ? ModelOptions.FirstOrDefault(m => string.Equals(m.Model, desc.Model, StringComparison.OrdinalIgnoreCase))
+                    : ModelOptions.FirstOrDefault();
+
+                if (profile != null && SelectedModel != null
+                    && (profile.Vendor == MotionVendor.Simulated || string.IsNullOrWhiteSpace(profile.Series)))
+                {
+                    profile.ApplyModel(SelectedModel);
+                }
             }
+            finally
+            {
+                _syncing = false;
+                RaiseModelHints();
+            }
+        }
+
+        private void RebuildInterfaces(bool selectFirst)
+        {
+            InterfaceOptions.Clear();
+            if (SelectedVendor == null)
+            {
+                return;
+            }
+
+            foreach (var iface in MotionCardCatalog.InterfacesFor(SelectedVendor.Value))
+            {
+                InterfaceOptions.Add(new CatalogOption<MotionCommandInterface>(iface, MotionCardCatalog.Display(iface)));
+            }
+
+            if (selectFirst)
+            {
+                SelectedInterface = InterfaceOptions.FirstOrDefault();
+                RebuildSeries(selectFirst: true);
+            }
+        }
+
+        private void RebuildSeries(bool selectFirst)
+        {
+            SeriesOptions.Clear();
+            if (SelectedVendor == null || SelectedInterface == null)
+            {
+                return;
+            }
+
+            foreach (var series in MotionCardCatalog.SeriesFor(SelectedVendor.Value, SelectedInterface.Value))
+            {
+                SeriesOptions.Add(new CatalogOption<string>(series, MotionCardCatalog.SeriesDisplay(series)));
+            }
+
+            if (selectFirst)
+            {
+                SelectedSeries = SeriesOptions.FirstOrDefault();
+                RebuildModels(selectFirst: true);
+            }
+        }
+
+        private void RebuildModels(bool selectFirst)
+        {
+            ModelOptions.Clear();
+            if (SelectedVendor == null || SelectedInterface == null || SelectedSeries == null)
+            {
+                return;
+            }
+
+            foreach (var model in MotionCardCatalog.ModelsFor(SelectedVendor.Value, SelectedInterface.Value, SelectedSeries.Value))
+            {
+                ModelOptions.Add(model);
+            }
+
+            if (selectFirst)
+            {
+                SelectedModel = ModelOptions.FirstOrDefault();
+            }
+        }
+
+        private void ApplySelectedModel()
+        {
+            if (SelectedProfile == null || SelectedModel == null)
+            {
+                return;
+            }
+
+            SelectedProfile.ApplyModel(SelectedModel);
+            RaisePropertyChanged(nameof(SelectedProfile));
+            OnValidate();
+        }
+
+        private void RaiseModelHints()
+        {
+            var model = SelectedModel;
+            if (model == null)
+            {
+                PlatformHint = "请按 厂商 → 脉冲/总线 → 系列 → 型号 选择控制卡。脉冲卡和总线卡不是同一套 SDK。";
+                AdapterWarning = string.Empty;
+            }
+            else
+            {
+                string accel = model.Accel == AccelParamKind.AccelerationTime
+                    ? "加减速按时间（秒）"
+                    : "加减速按加速度值";
+                string axisBase = $"轴号从 {model.AxisIndexBase} 起算";
+                PlatformHint = $"{model.Notes} {axisBase}；{accel}。";
+                AdapterWarning = model.IsImplemented
+                    ? string.Empty
+                    : MotionCardCatalog.NotImplementedMessage(model.Driver, model.Model);
+            }
+
+            RaisePropertyChanged(nameof(ShowAdapterWarning));
+            RaisePropertyChanged(nameof(ShowConnectionString));
+            RaisePropertyChanged(nameof(ShowConfigFile));
+            RaisePropertyChanged(nameof(ConnectionStringLabel));
+            RaisePropertyChanged(nameof(NativeLibraryText));
         }
 
         private void OnAddProfile()
@@ -144,16 +372,18 @@ namespace Sophon.UI.ViewModels
             var newProfile = new MotionCardProfile
             {
                 ProfileName = $"控制卡方案_{idx}",
-                Driver = DriverKind.GoogolGts,
-                CardModel = "GTS-400",
                 CardNo = 0,
-                Platform = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts),
                 Axes = new List<AxisDefinition>
                 {
                     new AxisDefinition { AxisId = 0, Name = "X轴", Unit = "mm", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500, SoftLimitEnabled = true, SoftLimitMin = -100, SoftLimitMax = 500 },
                     new AxisDefinition { AxisId = 1, Name = "Y轴", Unit = "mm", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500, SoftLimitEnabled = true, SoftLimitMin = -100, SoftLimitMax = 500 }
                 }
             };
+            var gts400 = MotionCardCatalog.Find("GTS-400");
+            if (gts400 != null)
+            {
+                newProfile.ApplyModel(gts400);
+            }
             Profiles.Add(newProfile);
             SelectedProfile = newProfile;
             Growl.Success($"已创建配置方案 '{newProfile.ProfileName}'");
@@ -178,6 +408,13 @@ namespace Sophon.UI.ViewModels
         private void OnAddAxis()
         {
             if (SelectedProfile == null) return;
+            int maxAxes = SelectedModel?.MaxAxes ?? 64;
+            if (SelectedProfile.Axes.Count >= maxAxes)
+            {
+                Growl.Warning($"型号 {SelectedModel?.Model} 最多 {maxAxes} 轴，不能再加。");
+                return;
+            }
+
             int nextId = SelectedProfile.Axes.Count > 0 ? SelectedProfile.Axes.Max(a => a.AxisId) + 1 : 0;
             var newAxis = new AxisDefinition
             {
@@ -255,7 +492,6 @@ namespace Sophon.UI.ViewModels
                 return;
             }
 
-            // 同步 Axes 回当前 Profile
             SelectedProfile.Axes = Axes.ToList();
             _store.Save(Profiles.ToList());
             _store.SetActive(SelectedProfile.ProfileName);

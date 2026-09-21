@@ -29,7 +29,9 @@ namespace Sophon.Infrastructure.Config
                 return errors;
             }
 
-            // 1. 轴数量有效性 (0..64)
+            var catalog = MotionCardCatalog.Find(p.CardModel);
+
+            // 1. 轴数量有效性 (0..64)，再按型号轴数上限收紧
             if (p.Axes == null)
             {
                 errors.Add("轴定义列表未初始化。");
@@ -37,6 +39,36 @@ namespace Sophon.Infrastructure.Config
             else if (p.Axes.Count < 0 || p.Axes.Count > 64)
             {
                 errors.Add($"轴数量超出有效范围(0~64): 当前轴数为 {p.Axes.Count}。");
+            }
+            else if (catalog != null && p.Axes.Count > catalog.MaxAxes)
+            {
+                errors.Add($"型号 {catalog.Model} 最多 {catalog.MaxAxes} 轴，当前配置了 {p.Axes.Count} 轴。");
+            }
+
+            if (catalog != null)
+            {
+                if (p.Driver != catalog.Driver)
+                {
+                    errors.Add($"型号 {catalog.Model} 应使用驱动 {MotionCardCatalog.Display(catalog.Driver)}，当前档案写成了 {MotionCardCatalog.Display(p.Driver)}。");
+                }
+
+                if (p.CommandInterface != catalog.CommandInterface)
+                {
+                    errors.Add($"型号 {catalog.Model} 是{MotionCardCatalog.Display(catalog.CommandInterface)}，不能按{MotionCardCatalog.Display(p.CommandInterface)}打开。");
+                }
+
+                if (!catalog.IsImplemented)
+                {
+                    errors.Add(MotionCardCatalog.NotImplementedMessage(catalog.Driver, catalog.Model));
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(p.CardModel) && p.Driver != DriverKind.Simulated)
+            {
+                errors.Add($"未知控制卡型号 '{p.CardModel}'。请从目录选择（品牌 → 脉冲/总线 → 系列 → 型号），不要手填。");
+            }
+            else if (p.Driver != DriverKind.Simulated && !MotionCardCatalog.IsImplemented(p.Driver))
+            {
+                errors.Add(MotionCardCatalog.NotImplementedMessage(p.Driver, p.CardModel));
             }
 
             // 2. 轴 ID 唯一性与各轴参数检查

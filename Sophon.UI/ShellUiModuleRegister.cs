@@ -29,17 +29,28 @@ namespace Sophon.UI
             }
 
             var profile = profileStore.GetActive() ?? profiles[0];
-            if (profile.Driver == DriverKind.Simulated || profile.Driver == DriverKind.ZmotionZmc)
+            if (profile.Driver == DriverKind.Simulated)
             {
-                profile.Driver = DriverKind.GoogolGts;
-                if (string.IsNullOrWhiteSpace(profile.CardModel) ||
-                    profile.CardModel.IndexOf("Sim", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    profile.CardModel.IndexOf("Virtual", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    profile.CardModel = "GTS-400";
-                }
+                var gts400 = MotionCardCatalog.Find("GTS-400")
+                             ?? throw new InvalidOperationException("选型目录缺少 GTS-400。");
+                profile.ApplyModel(gts400);
                 profileStore.Save(profiles);
                 profileStore.SetActive(profile.ProfileName);
+            }
+            else
+            {
+                var catalog = MotionCardCatalog.Resolve(profile);
+                if (catalog != null)
+                {
+                    profile.ApplyModel(catalog);
+                }
+            }
+
+            if (!MotionCardCatalog.IsImplemented(profile.Driver))
+            {
+                throw new NotSupportedException(
+                    MotionCardCatalog.NotImplementedMessage(profile.Driver, profile.CardModel)
+                    + " 请在控制卡配置页改选已实现的脉冲卡（固高 GTS / 雷赛 DMC）。");
             }
 
             IReadOnlyList<AxisDefinition> axes = profile.Axes;
