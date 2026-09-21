@@ -1,14 +1,63 @@
 namespace Sophon.Contracts
 {
     /// <summary>
-    /// 驱动类型。由配置决定加载哪套硬件实现；Simulated 为内置虚拟控制器。
+    /// 运行时适配器种类。只表示仓库里实际绑定的 DLL/实现，不表示厂商全部型号。
+    /// 脉冲卡与总线卡即使同品牌也不是同一个适配器；未实现的枚举必须在工厂里显式拒绝。
     /// </summary>
     public enum DriverKind
     {
         Simulated,
+        /// <summary>固高 GTS / GTS-VB 脉冲（或模拟量）卡，gts.dll。未经真机验证。</summary>
         GoogolGts,
+        /// <summary>雷赛 DMC 脉冲卡（DMC1000/3000/5000），LTDMC.dll。未经真机验证。</summary>
         LeadShineDmc,
+        /// <summary>正运动脉冲/网口控制器。仓库无适配器。</summary>
         ZmotionZmc,
+        /// <summary>固高 GEN EtherCAT 主站。仓库无适配器，禁止当 GTS 打开。</summary>
+        GoogolGen,
+        /// <summary>固高 GE gLink-II 主站。仓库无适配器。</summary>
+        GoogolGe,
+        /// <summary>雷赛 EtherCAT 总线卡/控制器（DMC-E / EMC / PAC）。不是 LTDMC 脉冲 API。</summary>
+        LeadShineEtherCAT,
+        /// <summary>正运动 EtherCAT 主站。仓库无适配器。</summary>
+        ZmotionEtherCAT,
+    }
+
+    /// <summary>控制卡厂商（选型第一级）。</summary>
+    public enum MotionVendor
+    {
+        Simulated,
+        /// <summary>固高科技</summary>
+        Googol,
+        /// <summary>雷赛智能</summary>
+        LeadShine,
+        /// <summary>正运动</summary>
+        Zmotion,
+    }
+
+    /// <summary>
+    /// 轴指令接口。脉冲卡在本地发脉冲；总线卡是主站，轴在从站驱动器上。二者 SDK/接线/轴数完全不同。
+    /// </summary>
+    public enum MotionCommandInterface
+    {
+        /// <summary>本地脉冲/方向。</summary>
+        Pulse,
+        /// <summary>模拟量伺服（±10V），不是脉冲方向。</summary>
+        Analog,
+        /// <summary>EtherCAT 主站。</summary>
+        EtherCAT,
+        /// <summary>固高 gLink-II 私有总线。</summary>
+        GLink,
+    }
+
+    /// <summary>控制卡与工控机的连接方式。</summary>
+    public enum MotionHostLink
+    {
+        Simulated,
+        Pci,
+        Pcie,
+        Ethernet,
+        Usb,
     }
 
     /// <summary>

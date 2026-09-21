@@ -7,6 +7,7 @@ namespace Sophon.Infrastructure.Motion.Drivers
 {
     /// <summary>
     /// 将控制卡通用 DI/DO 接到 IoMappingManager 的原始读写委托。未经真机验证。
+    /// 只覆盖已实现的脉冲卡适配器；总线卡没有这套位号 API。
     /// </summary>
     public static class MotionCardIoBridge
     {
@@ -27,19 +28,24 @@ namespace Sophon.Infrastructure.Motion.Drivers
                 };
             }
 
-            return (card, bit) =>
+            if (driver == DriverKind.GoogolGts)
             {
-                try
+                return (card, bit) =>
                 {
-                    short ret = GoogolGtsNative.GT_GetDi(1, out int value);
-                    if (ret != 0) return false;
-                    return ((value >> bit) & 1) != 0;
-                }
-                catch
-                {
-                    return false;
-                }
-            };
+                    try
+                    {
+                        short ret = GoogolGtsNative.GT_GetDi(1, out int value);
+                        if (ret != 0) return false;
+                        return ((value >> bit) & 1) != 0;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                };
+            }
+
+            throw new NotSupportedException(MotionCardCatalog.NotImplementedMessage(driver));
         }
 
         public static Action<int, int, bool> CreateDoWriter(DriverKind driver)
@@ -58,16 +64,21 @@ namespace Sophon.Infrastructure.Motion.Drivers
                 };
             }
 
-            return (card, bit, val) =>
+            if (driver == DriverKind.GoogolGts)
             {
-                try
+                return (card, bit, val) =>
                 {
-                    GoogolGtsNative.GT_SetDoBit(1, (short)bit, (short)(val ? 1 : 0));
-                }
-                catch
-                {
-                }
-            };
+                    try
+                    {
+                        GoogolGtsNative.GT_SetDoBit(1, (short)bit, (short)(val ? 1 : 0));
+                    }
+                    catch
+                    {
+                    }
+                };
+            }
+
+            throw new NotSupportedException(MotionCardCatalog.NotImplementedMessage(driver));
         }
     }
 }

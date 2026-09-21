@@ -376,6 +376,31 @@ namespace Sophon.Infrastructure.Tests
             Assert.NotNull(warningLog);
             Assert.Contains("降级到仿真控制器", warningLog);
         }
+
+        [Fact]
+        public void Create_LeadShineEtherCAT_ShouldThrowNotSupported_WithoutOpeningPulseDll()
+        {
+            var ex = Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.LeadShineEtherCAT));
+            Assert.Contains("EtherCAT", ex.Message);
+            Assert.Contains("LTDMC", ex.Message);
+        }
+
+        [Fact]
+        public void Create_GoogolGen_ShouldThrowNotSupported_WithoutOpeningGtsDll()
+        {
+            var ex = Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.GoogolGen));
+            Assert.Contains("GEN", ex.Message);
+            Assert.Contains("GTS", ex.Message);
+        }
+
+        [Fact]
+        public void Create_ZmotionZmc_ShouldThrowNotSupported()
+        {
+            Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.ZmotionZmc));
+        }
     }
 
     public class AxisManagerTests

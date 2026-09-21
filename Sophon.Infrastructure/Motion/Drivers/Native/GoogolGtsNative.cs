@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 namespace Sophon.Infrastructure.Motion.Drivers.Native
 {
     /// <summary>
-    /// 固高 GTS 运动控制卡底层 P/Invoke 原生函数声明。
-    /// 【注意】：本接口来自固高 GTS 系列编程手册标准接口，所有签名与调用点未经真机验证。
+    /// 固高 GTS / GTS-VB / GTHD 的 gts.dll 声明。GEN EtherCAT、GE gLink-II 不是这套 API。
+    /// 所有签名未经真机验证。
     /// </summary>
     internal static class GoogolGtsNative
     {

@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 namespace Sophon.Infrastructure.Motion.Drivers.Native
 {
     /// <summary>
-    /// 雷赛 DMC 运动控制卡底层 P/Invoke 原生函数声明。
-    /// 【注意】：本接口来自雷赛 DMC 系列编程手册标准接口，所有签名与调用点未经真机验证。
+    /// 雷赛 DMC 脉冲卡 LTDMC.dll 声明。只覆盖 DMC1000/3000/5000/5X10 这类本地脉冲卡。
+    /// DMC-E / EMC / PAC 是 EtherCAT 主站，不是这套 API。所有签名未经真机验证。
     /// </summary>
     internal static class LeadShineDmcNative
     {
