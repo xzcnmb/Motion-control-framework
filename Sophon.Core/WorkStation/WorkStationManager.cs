@@ -1,4 +1,4 @@
-﻿using Sophon.Common;
+using Sophon.Common;
 
 namespace Sophon.Core
 {
@@ -44,6 +44,14 @@ namespace Sophon.Core
             }
         }
 
+        public void Reset(string stationName)
+        {
+            if (_workStationFactory.WorkStationCache.ContainsKey(stationName))
+            {
+                _workStationFactory.WorkStationCache[stationName].Reset();
+            }
+        }
+
         public void StartAll()
         {
             foreach (var station in _workStationFactory.WorkStationCache.Values)
@@ -73,6 +81,14 @@ namespace Sophon.Core
             foreach (var station in _workStationFactory.WorkStationCache.Values)
             {
                 station.Stop();
+            }
+        }
+
+        public void ResetAll()
+        {
+            foreach (var station in _workStationFactory.WorkStationCache.Values)
+            {
+                station.Reset();
             }
         }
     }

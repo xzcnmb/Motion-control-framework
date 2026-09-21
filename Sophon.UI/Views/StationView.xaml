@@ -94,7 +94,8 @@
                     <Button Content="启动循环" Style="{StaticResource ButtonSuccess}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding StartCommand}" />
                     <Button Content="暂停" Style="{StaticResource ButtonWarning}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding PauseCommand}" />
                     <Button Content="继续" Style="{StaticResource ButtonPrimary}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding ResumeCommand}" />
-                    <Button Content="停止" Style="{StaticResource ButtonDanger}" Height="36" Padding="20,0" Command="{Binding StopCommand}" />
+                    <Button Content="停止" Style="{StaticResource ButtonDanger}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding StopCommand}" />
+                    <Button Content="报警复位" Style="{StaticResource ButtonDefault}" Height="36" Padding="20,0" Command="{Binding ResetCommand}" />
                 </StackPanel>
 
                 <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12" Foreground="#8C8C8C" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />

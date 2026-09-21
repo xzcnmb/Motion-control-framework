@@ -19,20 +19,20 @@ namespace Sophon.Core
         event Action<WorkStationState> StateChanged;
         event Action<int> CycleCompleted;
 
-        /// <summary>启动：Idle/Stopped/Alarm（已复位）→ Running，循环跑绑定配方。重复调用不叠加。</summary>
+        /// <summary>仅 Idle / Stopped → Running。Alarm 须先 Reset；Paused 请用 Resume，不会另开任务。</summary>
         void Start();
 
         void Pause();
 
         void Resume();
 
-        /// <summary>停止循环：Running/Paused → Stopped；Idle 时无操作。</summary>
+        /// <summary>停止循环并发 Cat1 受控停轴。急停必须硬接线，不走这里。</summary>
         void Stop();
 
         /// <summary>报警复位：Alarm → Idle。</summary>
         void Reset();
 
-        /// <summary>绑定流程图。运行中拒绝。</summary>
+        /// <summary>绑定流程图。仅 Idle / Stopped 允许。</summary>
         void BindRecipe(string flowName);
     }
 }

@@ -69,6 +69,7 @@ namespace Sophon.UI.ViewModels
         public DelegateCommand StopCommand { get; }
         public DelegateCommand BindRecipeCommand { get; }
         public DelegateCommand AddStationCommand { get; }
+        public DelegateCommand ResetCommand { get; }
 
         public StationViewModel(
             IWorkStationFactory workStationFactory,
@@ -86,6 +87,7 @@ namespace Sophon.UI.ViewModels
             StopCommand = new DelegateCommand(ExecuteStop, CanExecuteOnSelected);
             BindRecipeCommand = new DelegateCommand(ExecuteBind, CanExecuteOnSelected);
             AddStationCommand = new DelegateCommand(ExecuteAddStation);
+            ResetCommand = new DelegateCommand(ExecuteReset, CanExecuteOnSelected);
         }
 
         private bool CanExecuteOnSelected() => SelectedStation != null;
@@ -97,6 +99,7 @@ namespace Sophon.UI.ViewModels
             ResumeCommand.RaiseCanExecuteChanged();
             StopCommand.RaiseCanExecuteChanged();
             BindRecipeCommand.RaiseCanExecuteChanged();
+            ResetCommand.RaiseCanExecuteChanged();
         }
 
         public void OnNavigatedTo(NavigationContext navigationContext) => RefreshStations();
@@ -152,7 +155,7 @@ namespace Sophon.UI.ViewModels
                     _cycleHandlers[kv.Value] = onCycle;
                 }
 
-                StatusMessage = $"工站 {Stations.Count} 个，流程图 {AvailableFlows.Count} 张。启动后循环跑绑定配方，点停止才结束。";
+                StatusMessage = $"工站 {Stations.Count} 个，流程图 {AvailableFlows.Count} 张。启动后循环跑绑定配方，点停止才结束。报警必须先复位。";
                 SyncBindSelection();
             }
             catch (Exception ex)
@@ -305,6 +308,10 @@ namespace Sophon.UI.ViewModels
                 _workStationManager.Start(name);
                 Growl.Info($"工站「{name}」已启动，循环执行配方「{SelectedStation?.BoundFlowName}」，点停止结束。");
             }
+            catch (InvalidOperationException ex)
+            {
+                Growl.Warning(ex.Message);
+            }
             catch (Exception ex)
             {
                 Growl.Error($"启动工站「{name}」失败: {ex.Message}");
@@ -368,11 +375,31 @@ namespace Sophon.UI.ViewModels
             try
             {
                 _workStationManager.Stop(name);
-                Growl.Info($"工站「{name}」已停止循环");
+                Growl.Info($"工站「{name}」已停止循环（受控停轴，急停请用硬件按钮）");
             }
             catch (Exception ex)
             {
                 Growl.Error($"停止工站「{name}」失败: {ex.Message}");
+            }
+            RefreshSelectedState();
+        }
+
+        private void ExecuteReset()
+        {
+            var name = SelectedStation?.Name;
+            if (string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            try
+            {
+                _workStationManager.Reset(name);
+                Growl.Info($"工站「{name}」已复位");
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"复位工站「{name}」失败: {ex.Message}");
             }
             RefreshSelectedState();
         }

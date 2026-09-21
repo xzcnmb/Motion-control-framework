@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using Sophon.Common;
+using Sophon.Contracts;
 
 namespace Sophon.Core
 {
@@ -10,11 +11,13 @@ namespace Sophon.Core
         public WorkStationFactory(
             IFlowEngineFactory flowEngineFactory,
             IFlowContextFactory flowContextFactory,
-            WorkStationProfileStore? profileStore = null)
+            WorkStationProfileStore? profileStore = null,
+            IMotionController? motion = null)
         {
             _flowEngineFactory = flowEngineFactory;
             _flowContextFactory = flowContextFactory;
             _profileStore = profileStore;
+            _motion = motion;
             WorkStationCache = new ConcurrentDictionary<string, IWorkStation>();
         }
 
@@ -23,6 +26,7 @@ namespace Sophon.Core
         private readonly IFlowEngineFactory _flowEngineFactory;
         private readonly IFlowContextFactory _flowContextFactory;
         private readonly WorkStationProfileStore? _profileStore;
+        private readonly IMotionController? _motion;
 
         public IWorkStation CreateWorkStation(string workStationName)
         {
@@ -37,7 +41,7 @@ namespace Sophon.Core
                         BoundFlowName = string.IsNullOrWhiteSpace(profile.BoundFlowName) ? name : profile.BoundFlowName,
                         LoopRecipe = profile.LoopRecipe
                     };
-                return new WorkStation(name, _flowEngineFactory, _flowContextFactory, new StateMachine(), options);
+                return new WorkStation(name, _flowEngineFactory, _flowContextFactory, new StateMachine(), options, _motion);
             });
         }
     }
