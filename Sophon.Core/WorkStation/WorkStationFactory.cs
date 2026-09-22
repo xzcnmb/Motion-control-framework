@@ -13,12 +13,16 @@ namespace Sophon.Core
             IFlowEngineFactory flowEngineFactory,
             IFlowContextFactory flowContextFactory,
             WorkStationProfileStore? profileStore = null,
-            IMotionController? motion = null)
+            IMotionController? motion = null,
+            AxisGroupLease? axisLease = null,
+            AxisGroupStore? axisGroupStore = null)
         {
             _flowEngineFactory = flowEngineFactory;
             _flowContextFactory = flowContextFactory;
             _profileStore = profileStore;
             _motion = motion;
+            _axisLease = axisLease;
+            _axisGroupStore = axisGroupStore;
             WorkStationCache = new ConcurrentDictionary<string, IWorkStation>();
         }
 
@@ -28,6 +32,8 @@ namespace Sophon.Core
         private readonly IFlowContextFactory _flowContextFactory;
         private readonly WorkStationProfileStore? _profileStore;
         private readonly IMotionController? _motion;
+        private readonly AxisGroupLease? _axisLease;
+        private readonly AxisGroupStore? _axisGroupStore;
 
         public IWorkStation CreateWorkStation(string workStationName)
         {
@@ -40,9 +46,18 @@ namespace Sophon.Core
                     : new WorkStationOptions
                     {
                         BoundFlowName = string.IsNullOrWhiteSpace(profile.BoundFlowName) ? name : profile.BoundFlowName,
-                        LoopRecipe = profile.LoopRecipe
+                        LoopRecipe = profile.LoopRecipe,
+                        AxisGroupName = profile.AxisGroupName
                     };
-                return new WorkStation(name, _flowEngineFactory, _flowContextFactory, new StateMachine(), options, _motion);
+                return new WorkStation(
+                    name,
+                    _flowEngineFactory,
+                    _flowContextFactory,
+                    new StateMachine(),
+                    options,
+                    _motion,
+                    _axisLease,
+                    _axisGroupStore);
             });
         }
     }

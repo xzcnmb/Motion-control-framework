@@ -26,5 +26,14 @@ namespace Sophon.Contracts
 
         /// <summary>描述说明。</summary>
         public string Description { get; set; } = string.Empty;
+
+        /// <summary>工站侧显示名。空则用工位 GroupName。</summary>
+        public string DisplayName { get; set; } = string.Empty;
+
+        /// <summary>本组相关 DI（限位、到位等），工站操作组时一起看，不是运动学 TCP。</summary>
+        public List<string> RelatedDiNames { get; set; } = new();
+
+        /// <summary>本组相关 DO（夹爪、气缸等）。</summary>
+        public List<string> RelatedDoNames { get; set; } = new();
     }
 }

@@ -189,7 +189,7 @@ namespace Sophon.Core.Tests
                 new FakeFlowEngineFactory(new IFlowStep[] { new TestSteps.GateStep("G", gate, entered) }),
                 new FakeFlowContextFactory(),
                 new StateMachine(),
-                WorkStationOptions.SingleShot,
+                new WorkStationOptions { LoopRecipe = false, AxisIds = new[] { 0, 1 } },
                 motion);
 
             station.Start();
@@ -200,6 +200,63 @@ namespace Sophon.Core.Tests
             Assert.Empty(motion.AbortedAxes);
             Assert.False(motion.AbortAllCalled);
             gate.Set();
+        }
+
+        [Fact]
+        public void 停止只停轴组内的轴_不影响其他轴()
+        {
+            var motion = new FakeMotionControllerForAlarmTeach(
+                new AxisDefinition { AxisId = 0, Name = "X" },
+                new AxisDefinition { AxisId = 1, Name = "Y" },
+                new AxisDefinition { AxisId = 2, Name = "Z" });
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var station = new WorkStation(
+                "搬运",
+                new FakeFlowEngineFactory(new IFlowStep[] { new TestSteps.GateStep("G", gate, entered) }),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                new WorkStationOptions { LoopRecipe = false, AxisIds = new[] { 0, 1 } },
+                motion);
+
+            station.Start();
+            Assert.True(entered.Wait(2000));
+            station.Stop();
+            Assert.Equal(new[] { 0, 1 }, motion.StoppedAxes.ToArray());
+            Assert.DoesNotContain(2, motion.StoppedAxes);
+            gate.Set();
+        }
+
+        [Fact]
+        public void 两个工站不能同时占用同一根轴()
+        {
+            var lease = new AxisGroupLease();
+            using var gate = new ManualResetEventSlim(false);
+            using var entered = new ManualResetEventSlim(false);
+            var a = new WorkStation(
+                "A",
+                new FakeFlowEngineFactory(new IFlowStep[] { new TestSteps.GateStep("G", gate, entered) }),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                new WorkStationOptions { LoopRecipe = true, AxisIds = new[] { 0, 1 } },
+                axisLease: lease);
+            var b = new WorkStation(
+                "B",
+                new FakeFlowEngineFactory(new IFlowStep[] { new TestSteps.CountingStep("X", new ExecutionRecorder()) }),
+                new FakeFlowContextFactory(),
+                new StateMachine(),
+                new WorkStationOptions { LoopRecipe = false, AxisIds = new[] { 1, 2 } },
+                axisLease: lease);
+
+            a.Start();
+            Assert.True(entered.Wait(2000));
+            var ex = Assert.Throws<InvalidOperationException>(() => b.Start());
+            Assert.Contains("占用", ex.Message);
+            a.Stop();
+            gate.Set();
+            b.Start();
+            Assert.Equal(WorkStationState.Running, b.CurrentState);
+            b.Stop();
         }
 
         [Fact]

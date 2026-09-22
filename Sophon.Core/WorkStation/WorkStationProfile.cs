@@ -17,6 +17,9 @@ namespace Sophon.Core
 
         /// <summary>生产默认循环。单次模式仅测试使用。</summary>
         public bool LoopRecipe { get; set; } = true;
+
+        /// <summary>绑定的逻辑轴组名（SophonData/axis_groups.json）。空表示未绑轴组，Stop 不停轴。</summary>
+        public string AxisGroupName { get; set; } = string.Empty;
     }
 
     public sealed class WorkStationProfileFile

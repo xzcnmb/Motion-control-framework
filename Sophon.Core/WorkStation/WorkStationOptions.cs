@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
 
 namespace Sophon.Core
 {
@@ -21,5 +23,10 @@ namespace Sophon.Core
 
         /// <summary>true：Start 后循环执行配方直到 Stop。false：跑完一次回 Idle。</summary>
         public bool LoopRecipe { get; init; } = true;
+
+        public string? AxisGroupName { get; init; }
+
+        /// <summary>测试可直接给轴号，不走档案。</summary>
+        public IReadOnlyList<int> AxisIds { get; init; } = Array.Empty<int>();
     }
 }

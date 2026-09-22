@@ -22,7 +22,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="工站运行" FontSize="22" FontWeight="Bold" Foreground="#262626" />
-            <TextBlock Text="工站是设备单元，流程图是配方。绑定后点启动，会循环执行该流程来控制设备，点停止才结束。"
+            <TextBlock Text="工站是设备单元，流程图是配方，轴组是本组要停的那些轴。启动后循环跑配方；停止只停本组轴。"
                        FontSize="13" Foreground="#8C8C8C" Margin="0,6,0,0" TextWrapping="Wrap" />
         </StackPanel>
 
@@ -30,24 +30,25 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="160" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="220" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="140" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="新工站名" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#595959" />
                 <TextBox Grid.Column="1" Height="34" Text="{Binding NewStationName, UpdateSourceTrigger=PropertyChanged}" hc:BorderElement.CornerRadius="4" />
-                <TextBlock Grid.Column="2" Text="绑定配方" VerticalAlignment="Center" Margin="16,0,8,0" Foreground="#595959" />
-                <ComboBox Grid.Column="3" Height="34"
-                          ItemsSource="{Binding AvailableFlows}"
-                          SelectedItem="{Binding SelectedFlowToBind}"
-                          hc:BorderElement.CornerRadius="4" />
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="12,0,0,0">
-                    <Button Content="添加工站" Style="{StaticResource ButtonPrimary}" Height="34" Padding="14,0" Margin="0,0,8,0" Command="{Binding AddStationCommand}" />
-                    <Button Content="绑定到选中工站" Style="{StaticResource ButtonDefault}" Height="34" Padding="14,0" Margin="0,0,8,0" Command="{Binding BindRecipeCommand}" />
-                    <Button Content="刷新" Style="{StaticResource ButtonDefault}" Height="34" Padding="14,0" Command="{Binding RefreshCommand}" />
+                <TextBlock Grid.Column="2" Text="配方" VerticalAlignment="Center" Margin="12,0,8,0" Foreground="#595959" />
+                <ComboBox Grid.Column="3" Height="34" ItemsSource="{Binding AvailableFlows}" SelectedItem="{Binding SelectedFlowToBind}" hc:BorderElement.CornerRadius="4" />
+                <TextBlock Grid.Column="4" Text="轴组" VerticalAlignment="Center" Margin="12,0,8,0" Foreground="#595959" />
+                <ComboBox Grid.Column="5" Height="34" ItemsSource="{Binding AvailableGroups}" SelectedItem="{Binding SelectedGroupToBind}" hc:BorderElement.CornerRadius="4" />
+                <StackPanel Grid.Column="6" Orientation="Horizontal" Margin="12,0,0,0">
+                    <Button Content="添加工站" Style="{StaticResource ButtonPrimary}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding AddStationCommand}" />
+                    <Button Content="绑配方" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding BindRecipeCommand}" />
+                    <Button Content="绑轴组" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding BindAxisGroupCommand}" />
+                    <Button Content="刷新" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Command="{Binding RefreshCommand}" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -58,9 +59,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Text="工站 ↔ 配方" FontSize="15" FontWeight="SemiBold" Foreground="#262626" Margin="0,0,0,10" />
-
+                <TextBlock Grid.Row="0" Text="工站 ↔ 配方 ↔ 轴组" FontSize="15" FontWeight="SemiBold" Foreground="#262626" Margin="0,0,0,10" />
                 <DataGrid Grid.Row="1"
                           ItemsSource="{Binding Stations}"
                           SelectedItem="{Binding SelectedStation}"
@@ -74,10 +73,11 @@
                           BorderBrush="#E8E8E8"
                           HeadersVisibility="Column">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="工站（设备）" Binding="{Binding Name}" Width="1.2*" FontWeight="SemiBold" />
-                        <DataGridTextColumn Header="绑定配方（流程图）" Binding="{Binding RecipeText}" Width="1.6*" />
-                        <DataGridTextColumn Header="运行状态" Binding="{Binding StateText}" Width="120" FontWeight="Bold" />
-                        <DataGridTextColumn Header="已完成圈数" Binding="{Binding CycleCount}" Width="110" />
+                        <DataGridTextColumn Header="工站（设备）" Binding="{Binding Name}" Width="1.1*" FontWeight="SemiBold" />
+                        <DataGridTextColumn Header="绑定配方" Binding="{Binding RecipeText}" Width="1.3*" />
+                        <DataGridTextColumn Header="轴组" Binding="{Binding AxisGroupText}" Width="1.1*" />
+                        <DataGridTextColumn Header="运行状态" Binding="{Binding StateText}" Width="110" FontWeight="Bold" />
+                        <DataGridTextColumn Header="圈数" Binding="{Binding CycleCount}" Width="70" />
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>
@@ -89,7 +89,6 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="启动循环" Style="{StaticResource ButtonSuccess}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding StartCommand}" />
                     <Button Content="暂停" Style="{StaticResource ButtonWarning}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding PauseCommand}" />
@@ -97,7 +96,6 @@
                     <Button Content="停止" Style="{StaticResource ButtonDanger}" Height="36" Padding="20,0" Margin="0,0,10,0" Command="{Binding StopCommand}" />
                     <Button Content="报警复位" Style="{StaticResource ButtonDefault}" Height="36" Padding="20,0" Command="{Binding ResetCommand}" />
                 </StackPanel>
-
                 <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12" Foreground="#8C8C8C" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
             </Grid>
         </Border>
