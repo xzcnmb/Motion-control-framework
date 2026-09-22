@@ -117,5 +117,60 @@ namespace Sophon.Core.Flow.V2
             }
             return result;
         }
+
+        /// <summary>
+        /// 导出工程文件（.sophonflow.json）。工站导入同一份配方。
+        /// </summary>
+        public static string ExportTo(FlowGraph graph, string filePath)
+        {
+            if (graph == null) throw new ArgumentNullException(nameof(graph));
+            if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentException("路径不能为空", nameof(filePath));
+
+            string? dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(filePath, graph.ToJson(indented: true), Utf8WithoutBom);
+            return filePath;
+        }
+
+        /// <summary>
+        /// 从工程文件导入到流程库，返回流程名。同名覆盖前由调用方确认。
+        /// </summary>
+        public static FlowGraph ImportFrom(string filePath, string? baseDirectory = null, bool save = true)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                throw new FileNotFoundException("找不到流程工程文件", filePath);
+            }
+
+            var json = File.ReadAllText(filePath, Utf8WithoutBom);
+            var graph = FlowGraph.FromJson(json)
+                        ?? throw new InvalidOperationException("无法解析流程工程文件");
+            if (graph.Nodes == null || graph.Nodes.Count == 0)
+            {
+                throw new InvalidOperationException("工程文件没有节点，拒绝导入。");
+            }
+            if (string.IsNullOrWhiteSpace(graph.FlowName))
+            {
+                string file = Path.GetFileName(filePath);
+                graph.FlowName = file.EndsWith(".sophonflow.json", StringComparison.OrdinalIgnoreCase)
+                    ? file[..^".sophonflow.json".Length]
+                    : Path.GetFileNameWithoutExtension(file);
+            }
+
+            if (!graph.Validate(out var errors) && errors.Count > 0)
+            {
+                throw new InvalidOperationException("工程文件校验失败：" + string.Join("；", errors));
+            }
+
+            if (save)
+            {
+                Save(graph, baseDirectory);
+            }
+            return graph;
+        }
     }
 }

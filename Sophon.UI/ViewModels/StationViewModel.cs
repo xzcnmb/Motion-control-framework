@@ -80,6 +80,7 @@ namespace Sophon.UI.ViewModels
         public DelegateCommand BindAxisGroupCommand { get; }
         public DelegateCommand AddStationCommand { get; }
         public DelegateCommand ResetCommand { get; }
+        public DelegateCommand ImportRecipeCommand { get; }
 
         public StationViewModel(
             IWorkStationFactory workStationFactory,
@@ -101,6 +102,7 @@ namespace Sophon.UI.ViewModels
             BindAxisGroupCommand = new DelegateCommand(ExecuteBindGroup, CanExecuteOnSelected);
             AddStationCommand = new DelegateCommand(ExecuteAddStation);
             ResetCommand = new DelegateCommand(ExecuteReset, CanExecuteOnSelected);
+            ImportRecipeCommand = new DelegateCommand(ExecuteImportRecipe);
         }
 
         private bool CanExecuteOnSelected() => SelectedStation != null;
@@ -268,6 +270,42 @@ namespace Sophon.UI.ViewModels
             NewStationName = string.Empty;
             RefreshStations();
             Growl.Success($"已添加工站「{name}」");
+        }
+
+        private void ExecuteImportRecipe()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "导入流程工程作为配方",
+                Filter = "流程工程 (*.sophonflow.json;*.json)|*.sophonflow.json;*.json|所有文件 (*.*)|*.*"
+            };
+            if (dlg.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                string? bindTo = SelectedStation?.Name;
+                var graph = FlowGraphStore.ImportFrom(dlg.FileName);
+                RefreshStations();
+                SelectedFlowToBind = graph.FlowName;
+                if (!string.IsNullOrEmpty(bindTo))
+                {
+                    SelectedStation = Stations.FirstOrDefault(s => s.Name == bindTo);
+                    SelectedFlowToBind = graph.FlowName;
+                    ExecuteBind();
+                    Growl.Success($"已导入配方「{graph.FlowName}」并绑定到工站「{bindTo}」。");
+                }
+                else
+                {
+                    Growl.Success($"已导入配方「{graph.FlowName}」。选中工站后点「绑配方」即可绑定。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"导入配方失败: {ex.Message}");
+            }
         }
 
         private void ExecuteBind()

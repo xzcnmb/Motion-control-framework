@@ -39,6 +39,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
         }
 
         public ObservableCollection<FlowNodeViewModel> Nodes { get; } = new();
+        public ObservableCollection<FlowNodeViewModel> SelectedNodes { get; } = new();
         public ObservableCollection<FlowConnectionViewModel> Connections { get; } = new();
         public PendingConnectionViewModel PendingConnection { get; }
 
@@ -67,12 +68,9 @@ namespace Sophon.UI.ViewModels.FlowEditor
             {
                 if (SetProperty(ref _selectedNode, value))
                 {
-                    foreach (var n in Nodes)
-                    {
-                        n.IsSelected = ReferenceEquals(n, value);
-                    }
                     value?.ReloadPointParameters();
                     RaisePropertyChanged(nameof(HasSelectedNode));
+                    DeleteSelectedCommand?.RaiseCanExecuteChanged();
                 }
             }
         }
@@ -143,6 +141,9 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public DelegateCommand ImportV1Command { get; }
         public DelegateCommand<ToolboxItemViewModel> AddNodeCommand { get; }
         public DelegateCommand DeleteSelectedCommand { get; }
+        public DelegateCommand<FlowNodeViewModel> DeleteNodeCommand { get; }
+        public DelegateCommand ExportProjectCommand { get; }
+        public DelegateCommand ImportProjectCommand { get; }
         public DelegateCommand RunFlowCommand { get; }
         public DelegateCommand PauseFlowCommand { get; }
         public DelegateCommand ResumeFlowCommand { get; }
@@ -170,7 +171,11 @@ namespace Sophon.UI.ViewModels.FlowEditor
             ValidateFlowCommand = new DelegateCommand(ExecuteValidateFlow);
             ImportV1Command = new DelegateCommand(ExecuteImportV1);
             AddNodeCommand = new DelegateCommand<ToolboxItemViewModel>(ExecuteAddNode);
-            DeleteSelectedCommand = new DelegateCommand(ExecuteDeleteSelected);
+            DeleteSelectedCommand = new DelegateCommand(ExecuteDeleteSelected, () => HasSelectedNode)
+                .ObservesProperty(() => HasSelectedNode);
+            DeleteNodeCommand = new DelegateCommand<FlowNodeViewModel>(ExecuteDeleteNode);
+            ExportProjectCommand = new DelegateCommand(ExecuteExportProject);
+            ImportProjectCommand = new DelegateCommand(ExecuteImportProject);
             RunFlowCommand = new DelegateCommand(async () => await ExecuteRunFlowAsync(), () => CanRun).ObservesProperty(() => CanRun);
             PauseFlowCommand = new DelegateCommand(async () => await ExecutePauseFlowAsync(), () => CanPause).ObservesProperty(() => CanPause);
             ResumeFlowCommand = new DelegateCommand(async () => await ExecuteResumeFlowAsync(), () => CanResume).ObservesProperty(() => CanResume);
@@ -284,7 +289,30 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         private void AttachNode(FlowNodeViewModel node)
         {
-            node.OnSelected = n => SelectedNode = n;
+            node.OnSelected = n =>
+            {
+                if (!ReferenceEquals(SelectedNode, n))
+                {
+                    SelectedNode = n;
+                }
+            };
+            node.OnDeselected = n =>
+            {
+                if (ReferenceEquals(SelectedNode, n))
+                {
+                    SelectedNode = SelectedNodes.FirstOrDefault(x => !ReferenceEquals(x, n));
+                }
+            };
+        }
+
+        public void SelectOnly(FlowNodeViewModel? node)
+        {
+            SelectedNodes.Clear();
+            if (node != null)
+            {
+                SelectedNodes.Add(node);
+            }
+            SelectedNode = node;
         }
 
         private void ExecuteNewFlow()
@@ -298,8 +326,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
             var startNode = new FlowNodeViewModel("Start", "起始", new Point(120, 150));
             AttachNode(startNode);
             Nodes.Add(startNode);
-            SelectedNode = startNode;
-            startNode.IsSelected = true;
+            SelectOnly(startNode);
         }
 
         private void ExecuteAddNode(ToolboxItemViewModel? item)
@@ -323,10 +350,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
             var nodeVm = new FlowNodeViewModel(item.NodeType, item.Name, new Point(x, y));
             AttachNode(nodeVm);
             Nodes.Add(nodeVm);
-
-            foreach (var n in Nodes) n.IsSelected = false;
-            nodeVm.IsSelected = true;
-            SelectedNode = nodeVm;
+            SelectOnly(nodeVm);
         }
 
         private void ExecuteDeleteSelected()
@@ -337,19 +361,61 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 selectedList.Add(SelectedNode);
             }
 
+            if (selectedList.Count == 0)
+            {
+                Growl.Warning("请先点选画布上的节点再删除");
+                return;
+            }
+
             foreach (var node in selectedList)
             {
-                // 移除关联连线
+                if (string.Equals(node.NodeType, "Start", StringComparison.OrdinalIgnoreCase)
+                    && Nodes.Count(n => string.Equals(n.NodeType, "Start", StringComparison.OrdinalIgnoreCase)) <= 1)
+                {
+                    Growl.Warning("至少保留一个起始节点");
+                    continue;
+                }
+
                 var attachedConns = Connections.Where(c => c.Source.Node == node || c.Target.Node == node).ToList();
                 foreach (var conn in attachedConns)
                 {
-                    Connections.Remove(conn);
+                    DisconnectConnection(conn);
                 }
+                node.OnSelected = null;
+                node.OnDeselected = null;
+                node.ClearSelected();
                 Nodes.Remove(node);
             }
 
-            SelectedNode = Nodes.FirstOrDefault();
-            if (SelectedNode != null) SelectedNode.IsSelected = true;
+            SelectOnly(Nodes.FirstOrDefault());
+        }
+
+        private void ExecuteDeleteNode(FlowNodeViewModel? node)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            if (string.Equals(node.NodeType, "Start", StringComparison.OrdinalIgnoreCase)
+                && Nodes.Count(n => string.Equals(n.NodeType, "Start", StringComparison.OrdinalIgnoreCase)) <= 1)
+            {
+                Growl.Warning("至少保留一个起始节点");
+                return;
+            }
+
+            var attachedConns = Connections.Where(c => c.Source.Node == node || c.Target.Node == node).ToList();
+            foreach (var conn in attachedConns)
+            {
+                DisconnectConnection(conn);
+            }
+            node.OnSelected = null;
+            node.ClearSelected();
+            Nodes.Remove(node);
+            if (ReferenceEquals(SelectedNode, node))
+            {
+                SelectOnly(Nodes.FirstOrDefault());
+            }
         }
 
         public FlowGraph BuildGraph()
@@ -417,8 +483,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 }
             }
 
-            SelectedNode = Nodes.FirstOrDefault();
-            if (SelectedNode != null) SelectedNode.IsSelected = true;
+            SelectOnly(Nodes.FirstOrDefault());
         }
 
         private void ExecuteSaveFlow()
@@ -519,6 +584,79 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 {
                     Growl.Error($"打开流程失败: {ex.Message}");
                 }
+            }
+        }
+
+        private void ExecuteExportProject()
+        {
+            if (string.IsNullOrWhiteSpace(FlowName))
+            {
+                Growl.Warning("请先填写流程名再导出");
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                Title = "导出流程工程",
+                Filter = "流程工程 (*.sophonflow.json)|*.sophonflow.json|流程图 JSON (*.json)|*.json",
+                FileName = FlowName + ".sophonflow.json",
+                InitialDirectory = FlowGraphStore.DefaultBaseDirectory
+            };
+            if (dlg.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                var graph = BuildGraph();
+                string path = FlowGraphStore.ExportTo(graph, dlg.FileName);
+                Growl.Success($"已导出工程：{path}\n工站页可导入该文件作为配方。");
+                StatusHint = $"已导出 {DateTime.Now:HH:mm:ss}  {path}";
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"导出失败: {ex.Message}");
+            }
+        }
+
+        private void ExecuteImportProject()
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "导入流程工程",
+                Filter = "流程工程 (*.sophonflow.json;*.json)|*.sophonflow.json;*.json|所有文件 (*.*)|*.*",
+                InitialDirectory = FlowGraphStore.DefaultBaseDirectory
+            };
+            if (dlg.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                var preview = FlowGraphStore.ImportFrom(dlg.FileName, save: false);
+                if (FlowGraphStore.ListFlowNames().Contains(preview.FlowName))
+                {
+                    var overwrite = System.Windows.MessageBox.Show(
+                        $"流程库已有「{preview.FlowName}」，导入将覆盖。是否继续？",
+                        "覆盖确认",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+                    if (overwrite != MessageBoxResult.Yes)
+                    {
+                        return;
+                    }
+                }
+
+                var graph = FlowGraphStore.ImportFrom(dlg.FileName);
+                LoadGraph(graph);
+                RefreshSavedFlows();
+                Growl.Success($"已导入工程「{graph.FlowName}」，并写入流程库。工站可绑定该配方。");
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"导入失败: {ex.Message}");
             }
         }
 

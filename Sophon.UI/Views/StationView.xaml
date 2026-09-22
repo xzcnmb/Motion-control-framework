@@ -48,6 +48,7 @@
                     <Button Content="添加工站" Style="{StaticResource ButtonPrimary}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding AddStationCommand}" />
                     <Button Content="绑配方" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding BindRecipeCommand}" />
                     <Button Content="绑轴组" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding BindAxisGroupCommand}" />
+                    <Button Content="导入工程" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding ImportRecipeCommand}" />
                     <Button Content="刷新" Style="{StaticResource ButtonDefault}" Height="34" Padding="12,0" Command="{Binding RefreshCommand}" />
                 </StackPanel>
             </Grid>

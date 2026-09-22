@@ -30,17 +30,49 @@ namespace Sophon.UI.ViewModels.FlowEditor
         }
 
         public Action<FlowNodeViewModel>? OnSelected { get; set; }
+        public Action<FlowNodeViewModel>? OnDeselected { get; set; }
 
+        private bool _syncingSelection;
         private bool _isSelected;
         public bool IsSelected
         {
             get => _isSelected;
             set
             {
-                if (SetProperty(ref _isSelected, value) && value)
+                if (!SetProperty(ref _isSelected, value) || _syncingSelection)
                 {
-                    OnSelected?.Invoke(this);
+                    return;
                 }
+
+                _syncingSelection = true;
+                try
+                {
+                    if (value)
+                    {
+                        OnSelected?.Invoke(this);
+                    }
+                    else
+                    {
+                        OnDeselected?.Invoke(this);
+                    }
+                }
+                finally
+                {
+                    _syncingSelection = false;
+                }
+            }
+        }
+
+        public void ClearSelected()
+        {
+            _syncingSelection = true;
+            try
+            {
+                IsSelected = false;
+            }
+            finally
+            {
+                _syncingSelection = false;
             }
         }
 

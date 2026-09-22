@@ -144,7 +144,9 @@
                         <TextBlock Text="{Binding StatusHint}" FontSize="11" Foreground="#52C41A" VerticalAlignment="Center" Margin="8,0,6,0" MaxWidth="280" TextTrimming="CharacterEllipsis" />
                         <Button Content="校验图" Command="{Binding ValidateFlowCommand}" Style="{StaticResource ButtonSuccess}" Height="30" Padding="10,0" Margin="0,0,6,0" />
                         <Button Content="导入旧版V1" Command="{Binding ImportV1Command}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
-                        <Button Content="删除节点" Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
+                        <Button Content="删除节点" Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ButtonDanger}" Height="30" Padding="10,0" Margin="0,0,6,0" />
+                        <Button Content="导出工程" Command="{Binding ExportProjectCommand}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
+                        <Button Content="导入工程" Command="{Binding ImportProjectCommand}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
                     </StackPanel>
 
                     <!-- 流程运行控制 -->
@@ -162,13 +164,18 @@
             <Border Grid.Row="1" Background="#FFFFFF" CornerRadius="8" ClipToBounds="True" Effect="{StaticResource EffectShadow1}">
                 <nodify:NodifyEditor
                     ItemsSource="{Binding Nodes}"
+                    SelectedItems="{Binding SelectedNodes, Mode=TwoWay}"
                     Connections="{Binding Connections}"
                     PendingConnection="{Binding PendingConnection}"
                     ItemContainerStyle="{StaticResource FlowNodeContainerStyle}"
                     ConnectionTemplate="{StaticResource FlowConnectionTemplate}"
                     PendingConnectionTemplate="{StaticResource FlowPendingConnectionTemplate}"
                     ViewportLocation="{Binding ViewportLocation, Mode=TwoWay}"
-                    ViewportZoom="{Binding ViewportZoom, Mode=TwoWay}">
+                    ViewportZoom="{Binding ViewportZoom, Mode=TwoWay}"
+                    Focusable="True">
+                    <nodify:NodifyEditor.InputBindings>
+                        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+                    </nodify:NodifyEditor.InputBindings>
                     <nodify:NodifyEditor.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:FlowNodeViewModel}">
                             <!-- 节点卡片主体 -->
@@ -195,6 +202,7 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
 
                                             <!-- 节点名称与类型 -->
@@ -203,10 +211,16 @@
                                                 <TextBlock Text="{Binding NodeType}" FontSize="10" Foreground="#E6F7FF" Opacity="0.9" />
                                             </StackPanel>
 
-                                            <!-- 运行状态徽章（Idle 灰/Running 蓝/Completed 绿/Failed 红/Skipped 黄） -->
-                                            <Border Grid.Column="1" Background="{Binding StateBrush}" CornerRadius="10" Padding="6,2" VerticalAlignment="Center">
+                                            <Border Grid.Column="1" Background="{Binding StateBrush}" CornerRadius="10" Padding="6,2" VerticalAlignment="Center" Margin="0,0,6,0">
                                                 <TextBlock Text="{Binding StateText}" FontSize="10" Foreground="White" FontWeight="Bold" />
                                             </Border>
+
+                                            <Button Grid.Column="2" Content="×" Width="22" Height="22" Padding="0" FontSize="12" FontWeight="Bold"
+                                                    ToolTip="删除此节点"
+                                                    Command="{Binding DataContext.DeleteNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Background="#00000000" Foreground="White" BorderThickness="0"
+                                                    Cursor="Hand" />
                                         </Grid>
                                     </Border>
 
@@ -346,8 +360,9 @@
                         <!-- 节点基础信息 -->
                         <TextBlock Text="基础信息" FontSize="13" FontWeight="Bold" Foreground="#262626" Margin="0,0,0,8" />
 
-                        <TextBlock Text="节点名称:" FontSize="12" Foreground="#595959" Margin="0,0,0,4" />
+                        <TextBlock Text="节点名称（可改）:" FontSize="12" Foreground="#595959" Margin="0,0,0,4" />
                         <hc:TextBox Text="{Binding SelectedNode.Name, UpdateSourceTrigger=PropertyChanged}" Height="30" FontSize="12" Margin="0,0,0,10" />
+                        <TextBlock Text="点画布节点即可改参数；Delete 或「删除节点」可删。改完点保存。" FontSize="11" Foreground="#8C8C8C" TextWrapping="Wrap" Margin="0,0,0,10" />
 
                         <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
