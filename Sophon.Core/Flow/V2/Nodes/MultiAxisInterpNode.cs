@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Sophon.Contracts;
+using Sophon.Core.Teach;
 
 namespace Sophon.Core.Flow.V2
 {
@@ -24,7 +25,8 @@ namespace Sophon.Core.Flow.V2
         public override IReadOnlyList<ParameterSchema> ParameterSchemas => new[]
         {
             new ParameterSchema("axisIds", "联动轴ID列表", "json", "[0,1]", "参与插补/联动的轴 ID 列表，支持数组或逗号分隔如 '0,1'", isRequired: true),
-            new ParameterSchema("targets", "目标坐标列表", "json", "[100.0,200.0]", "各轴目标位置列表，长度须与轴列表一致", isRequired: true),
+            new ParameterSchema("pointName", "示教点", "point", "", "从示教点表选择，按轴号取各轴坐标。选了示教点就不用手填目标"),
+            new ParameterSchema("targets", "目标坐标列表", "json", "[100.0,200.0]", "各轴手填目标；选了示教点或上下文变量时忽略"),
             new ParameterSchema("targetsFromContext", "目标取自上下文", "json", null, "上下文变量名数组（如 ['VisionWorldX','VisionWorldY']），存在时优先于 targets 使用（视觉引导闭环用）"),
             new ParameterSchema("speed", "合成速度(mm/s)", "double", 100.0, "定位最大速度", isRequired: true),
             new ParameterSchema("accel", "合成加速度(mm/s²)", "double", 500.0, "加速度", isRequired: true),
@@ -40,8 +42,18 @@ namespace Sophon.Core.Flow.V2
                 return NodeExecutionResult.Failed("运动控制器 (IMotionController) 未注入或未就绪");
             }
 
-            var axisIds = ParseIntArray(ctx, "axisIds");
-            double[] targets = ResolveTargets(ctx, axisIds);
+            int[] axisIds;
+            double[] targets;
+            try
+            {
+                axisIds = ParseIntArray(ctx, "axisIds");
+                targets = ResolveTargets(ctx, axisIds);
+            }
+            catch (InvalidOperationException ex)
+            {
+                ctx.LogError(ex.Message);
+                return NodeExecutionResult.Failed(ex.Message);
+            }
 
             if (axisIds.Length == 0 || targets.Length == 0 || axisIds.Length != targets.Length)
             {
@@ -156,6 +168,13 @@ namespace Sophon.Core.Flow.V2
                 }
                 return resolved;
             }
+
+            string? pointName = ctx.GetParameter<string>("pointName");
+            if (!string.IsNullOrWhiteSpace(pointName))
+            {
+                return TeachPointLookup.ResolveAxisTargets(pointName, axisIds);
+            }
+
             return ParseDoubleArray(ctx, "targets");
         }
 

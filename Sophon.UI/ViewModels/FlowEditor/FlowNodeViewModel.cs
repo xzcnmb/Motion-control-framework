@@ -29,11 +29,19 @@ namespace Sophon.UI.ViewModels.FlowEditor
             set => SetProperty(ref _location, value);
         }
 
+        public Action<FlowNodeViewModel>? OnSelected { get; set; }
+
         private bool _isSelected;
         public bool IsSelected
         {
             get => _isSelected;
-            set => SetProperty(ref _isSelected, value);
+            set
+            {
+                if (SetProperty(ref _isSelected, value) && value)
+                {
+                    OnSelected?.Invoke(this);
+                }
+            }
         }
 
         public string Category { get; }
@@ -200,6 +208,14 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public void UpdateParameter(string name, object? value)
         {
             Parameters[name] = value;
+        }
+
+        public void ReloadPointParameters()
+        {
+            foreach (var editor in ParameterEditors)
+            {
+                editor.ReloadPointOptions();
+            }
         }
 
         public FlowNode ToModel()

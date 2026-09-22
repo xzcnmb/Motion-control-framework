@@ -324,13 +324,27 @@ namespace Sophon.UI.ViewModels
             if (string.IsNullOrEmpty(name)) return;
             try
             {
-                if (_workStationFactory.WorkStationCache.TryGetValue(name, out var station)
-                    && string.IsNullOrWhiteSpace(station.BoundFlowName))
+                if (_workStationFactory.WorkStationCache.TryGetValue(name, out var station))
                 {
-                    Growl.Warning($"工站「{name}」还没有绑定流程图");
-                    return;
+                    if (string.IsNullOrWhiteSpace(station.BoundFlowName))
+                    {
+                        Growl.Warning($"工站「{name}」还没有绑定流程图");
+                        return;
+                    }
+                    if (station.BoundAxisIds.Count == 0)
+                    {
+                        Growl.Warning($"工站「{name}」还没有绑定轴组（或轴组为空），停止时无法只停本组轴。");
+                        return;
+                    }
                 }
                 _workStationManager.Start(name);
+                if (_workStationFactory.WorkStationCache.TryGetValue(name, out var after)
+                    && after.CurrentState != WorkStationState.Running)
+                {
+                    Growl.Warning($"工站「{name}」未进入运行（当前 {after.CurrentState}）。暂停请点继续；上一轮未退出请稍后再启动。");
+                    RefreshSelectedState();
+                    return;
+                }
                 Growl.Info($"工站「{name}」已启动循环");
             }
             catch (InvalidOperationException ex) { Growl.Warning(ex.Message); }

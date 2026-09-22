@@ -15,7 +15,7 @@ namespace Sophon.Core
         public static WorkStationOptions Cyclic(string? boundFlowName = null) => new()
         {
             LoopRecipe = true,
-            BoundFlowName = boundFlowName
+            BoundFlowName = boundFlowName ?? string.Empty
         };
 
         /// <summary>绑定的 v2 流程图名（SophonData/flows/{name}.json）。空则用工站名。</summary>

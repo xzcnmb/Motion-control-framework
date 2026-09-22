@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Sophon.Contracts;
+using Sophon.Core.Teach;
 
 namespace Sophon.Core.Flow.V2
 {
@@ -47,14 +48,14 @@ namespace Sophon.Core.Flow.V2
             double jerk = ctx.GetParameter<double>("jerk", 0.0);
             int timeoutMs = ctx.GetParameter<int>("timeoutMs", 30000);
 
-            // 如果指定了点名且上下文提供了点位坐标，可从上下文尝试读取
             if (!string.IsNullOrWhiteSpace(pointName))
             {
-                var pointVal = ctx.GetVariable<double?>($"Point_{pointName}");
-                if (pointVal.HasValue)
+                if (!TeachPointLookup.TryGetAxisPosition(pointName, axisId, out var taught))
                 {
-                    target = pointVal.Value;
+                    return NodeExecutionResult.Failed($"找不到示教点「{pointName}」或其中没有轴 {axisId} 的坐标");
                 }
+                target = taught;
+                ctx.LogInfo($"轴 {axisId} 目标取自示教点「{pointName}」= {target}");
             }
 
             ctx.LogInfo($"轴 {axisId} 开始绝对运动 -> 目标: {target}, 速度: {speed}, 超时: {timeoutMs}ms");

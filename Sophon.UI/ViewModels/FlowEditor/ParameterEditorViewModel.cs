@@ -1,8 +1,11 @@
 #nullable enable
 using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text.Json;
 using Prism.Mvvm;
 using Sophon.Core.Flow.V2;
+using Sophon.Core.Teach;
 
 namespace Sophon.UI.ViewModels.FlowEditor
 {
@@ -22,8 +25,11 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public bool IsInt => Type == "int" || Type == "axis";
         public bool IsDouble => Type == "double";
         public bool IsEnum => Type == "enum" && Options != null && Options.Length > 0;
+        public bool IsPoint => Type == "point";
         public bool IsJson => Type == "json";
-        public bool IsString => !IsBool && !IsInt && !IsDouble && !IsEnum && !IsJson;
+        public bool IsString => !IsBool && !IsInt && !IsDouble && !IsEnum && !IsJson && !IsPoint;
+
+        public ObservableCollection<string> PointOptions { get; } = new();
 
         private object? _value;
         public object? Value
@@ -40,6 +46,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
                     RaisePropertyChanged(nameof(BoolValue));
                     RaisePropertyChanged(nameof(EnumValue));
                     RaisePropertyChanged(nameof(JsonValue));
+                    RaisePropertyChanged(nameof(PointValue));
                 }
             }
         }
@@ -119,11 +126,44 @@ namespace Sophon.UI.ViewModels.FlowEditor
             set => Value = value;
         }
 
+        public string PointValue
+        {
+            get => Value?.ToString() ?? "";
+            set => Value = value ?? "";
+        }
+
         public ParameterEditorViewModel(FlowNodeViewModel node, ParameterSchema schema, object? initialValue)
         {
             _node = node;
             Schema = schema;
             _value = initialValue ?? schema.DefaultValue;
+            if (IsPoint)
+            {
+                ReloadPointOptions();
+            }
+        }
+
+        public void ReloadPointOptions()
+        {
+            PointOptions.Clear();
+            PointOptions.Add("");
+            try
+            {
+                foreach (var name in TeachPointLookup.ListNames())
+                {
+                    PointOptions.Add(name);
+                }
+            }
+            catch
+            {
+            }
+
+            string current = PointValue;
+            if (!string.IsNullOrWhiteSpace(current)
+                && !PointOptions.Any(p => string.Equals(p, current, StringComparison.Ordinal)))
+            {
+                PointOptions.Add(current);
+            }
         }
     }
 }

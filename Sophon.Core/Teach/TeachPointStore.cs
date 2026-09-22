@@ -30,6 +30,8 @@ namespace Sophon.Core.Teach
             Load();
         }
 
+        public void Reload() => Load();
+
         public IReadOnlyList<TeachPoint> GetAllPoints() => _points.Values.OrderBy(p => p.Name).ToList();
 
         public TeachPoint? GetPoint(string id) => _points.TryGetValue(id, out var p) ? p : null;

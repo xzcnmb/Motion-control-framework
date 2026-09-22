@@ -141,6 +141,7 @@
                         <ComboBox ItemsSource="{Binding SavedFlowNames}" SelectedItem="{Binding SelectedSavedFlow}" Width="130" Height="30" Margin="0,0,6,0" ToolTip="选择并载入已保存的流程" />
 
                         <Button Content="保存" Command="{Binding SaveFlowCommand}" Style="{StaticResource ButtonPrimary}" Height="30" Padding="12,0" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding StatusHint}" FontSize="11" Foreground="#52C41A" VerticalAlignment="Center" Margin="8,0,6,0" MaxWidth="280" TextTrimming="CharacterEllipsis" />
                         <Button Content="校验图" Command="{Binding ValidateFlowCommand}" Style="{StaticResource ButtonSuccess}" Height="30" Padding="10,0" Margin="0,0,6,0" />
                         <Button Content="导入旧版V1" Command="{Binding ImportV1Command}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
                         <Button Content="删除节点" Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ButtonDefault}" Height="30" Padding="10,0" Margin="0,0,6,0" />
@@ -455,7 +456,21 @@
                                                 </hc:NumericUpDown.Style>
                                             </hc:NumericUpDown>
 
-                                            <!-- 4. 枚举下拉选择 ComboBox -->
+                                            <!-- 4. 示教点下拉 -->
+                                            <ComboBox ItemsSource="{Binding PointOptions}" SelectedItem="{Binding PointValue, Mode=TwoWay}" IsEditable="False" Height="28" FontSize="12">
+                                                <ComboBox.Style>
+                                                    <Style TargetType="ComboBox" BasedOn="{StaticResource ComboBoxBaseStyle}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsPoint}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ComboBox.Style>
+                                            </ComboBox>
+
+                                            <!-- 5. 枚举下拉选择 ComboBox -->
                                             <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding EnumValue}" Height="28" FontSize="12">
                                                 <ComboBox.Style>
                                                     <Style TargetType="ComboBox" BasedOn="{StaticResource ComboBoxBaseStyle}">
@@ -469,7 +484,7 @@
                                                 </ComboBox.Style>
                                             </ComboBox>
 
-                                            <!-- 5. JSON / 多行文本框 -->
+                                            <!-- 6. JSON / 多行文本框 -->
                                             <hc:TextBox Text="{Binding JsonValue, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="65" FontSize="11" TextWrapping="Wrap">
                                                 <hc:TextBox.Style>
                                                     <Style TargetType="hc:TextBox" BasedOn="{StaticResource TextBoxBaseStyle}">

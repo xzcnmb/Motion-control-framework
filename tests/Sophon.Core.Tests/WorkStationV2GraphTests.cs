@@ -162,7 +162,9 @@ namespace Sophon.Core.Tests
                 new V2GraphFlowEngineFactory(_dir),
                 new FakeFlowContextFactory(),
                 new StateMachine(),
-                loop ? WorkStationOptions.Cyclic(name) : WorkStationOptions.SingleShot);
+                loop
+                    ? WorkStationOptions.Cyclic(name)
+                    : new WorkStationOptions { LoopRecipe = false, BoundFlowName = name });
 
         private void SaveLinear(string flowName, params int[] delayMs)
         {

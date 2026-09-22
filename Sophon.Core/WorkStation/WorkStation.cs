@@ -11,7 +11,8 @@ namespace Sophon.Core
     /// <summary>
     /// 工站（ISA-88 Unit / PackML 设备）：绑定一张配方图 + 一个逻辑轴组。
     /// Start 进入 Execute 循环直到 Stop。暂停挂在节点边界，不停轴。
-    /// 停止 = 工站 CTS + 仅对本组轴 Cat1 受控停。急停必须硬接线。
+    /// 停止 = 工站 CTS + 仅对本组轴 Cat1 受控停。轴占用在任务真正退出后才释放（PLCopen：组未 Disabled 前轴不能进另一组）。
+    /// 急停必须硬接线。
     /// </summary>
     public class WorkStation : IWorkStation
     {
@@ -28,14 +29,15 @@ namespace Sophon.Core
             WorkStationName = workStationName;
             _flowEngineFactory = flowEngineFactory;
             _options = options ?? WorkStationOptions.Cyclic(workStationName);
-            BoundFlowName = string.IsNullOrWhiteSpace(_options.BoundFlowName)
-                ? workStationName
-                : _options.BoundFlowName!;
+            BoundFlowName = _options.BoundFlowName ?? string.Empty;
             LoopRecipe = _options.LoopRecipe;
             AxisGroupName = _options.AxisGroupName ?? string.Empty;
             BoundAxisIds = Array.Empty<int>();
-            _flowEngine = flowEngineFactory.CreateFlowEngine(BoundFlowName);
-            _flowController = _flowEngine as IFlowController;
+            if (!string.IsNullOrWhiteSpace(BoundFlowName))
+            {
+                _flowEngine = flowEngineFactory.CreateFlowEngine(BoundFlowName);
+                _flowController = _flowEngine as IFlowController;
+            }
             _flowContext = flowContextFactory.CreateFlowContext(WorkStationName);
             _stateMachine = stateMachine;
             _motion = motion;
@@ -60,7 +62,7 @@ namespace Sophon.Core
         private readonly IMotionController? _motion;
         private readonly AxisGroupLease? _axisLease;
         private readonly AxisGroupStore? _axisGroupStore;
-        private IFlowEngine _flowEngine;
+        private IFlowEngine? _flowEngine;
         private IFlowController? _flowController;
         private readonly IFlowContext _flowContext;
         private readonly IStateMachine _stateMachine;
@@ -108,8 +110,14 @@ namespace Sophon.Core
                     throw new InvalidOperationException($"找不到轴组「{groupName}」。请先在轴组配置里创建。");
                 }
 
+                var ids = group.DistinctAxisIds();
+                if (ids.Count == 0)
+                {
+                    throw new InvalidOperationException($"轴组「{group.GroupName}」没有轴，不能绑定。");
+                }
+
                 AxisGroupName = group.GroupName;
-                BoundAxisIds = group.DistinctAxisIds();
+                BoundAxisIds = ids;
                 _flowContext.Logger.Info($"工站{WorkStationName} 绑定轴组「{AxisGroupName}」轴 [{string.Join(",", BoundAxisIds)}]");
             }
         }
@@ -137,10 +145,23 @@ namespace Sophon.Core
                         $"工站「{WorkStationName}」处于报警，必须先复位再启动。");
                 }
 
+                if (string.IsNullOrWhiteSpace(BoundFlowName) || _flowEngine == null)
+                {
+                    throw new InvalidOperationException(
+                        $"工站「{WorkStationName}」未绑定流程图。请在工站页选择配方后再启动。");
+                }
+
                 if (_runTask != null && !_runTask.IsCompleted)
                 {
                     _flowContext.Logger.Warn($"工站{WorkStationName}上一轮循环尚未退出，拒绝启动（PackML 同一时刻只允许一个 Execute）");
                     return;
+                }
+
+                RefreshBoundAxesFromStore();
+                if (_axisLease != null && BoundAxisIds.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"工站「{WorkStationName}」未绑定轴组（或轴组为空），不能启动。");
                 }
 
                 if (_axisLease != null && BoundAxisIds.Count > 0)
@@ -168,17 +189,14 @@ namespace Sophon.Core
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(BoundFlowName))
-                {
-                    throw new InvalidOperationException(
-                        $"工站「{WorkStationName}」未绑定流程图。请在工站页选择配方后再启动。");
-                }
+                var engine = _flowEngine ?? throw new InvalidOperationException(
+                    $"工站「{WorkStationName}」未绑定流程图。");
 
                 while (!cts.IsCancellationRequested)
                 {
                     _flowContext.Logger.Info(
                         $"工站{WorkStationName} 第 {CycleCount + 1} 次执行配方「{BoundFlowName}」");
-                    await _flowEngine.RunAsync(_flowContext, cts.Token).ConfigureAwait(false);
+                    await engine.RunAsync(_flowContext, cts.Token).ConfigureAwait(false);
 
                     if (cts.IsCancellationRequested)
                     {
@@ -222,13 +240,11 @@ namespace Sophon.Core
                 }
                 if (goIdle)
                 {
-                    ReleaseAxes();
                     ApplyState(WorkStationState.Idle);
                 }
             }
             catch (OperationCanceledException)
             {
-                ReleaseAxes();
                 _flowContext.Logger.Info($"工站{WorkStationName}流程被取消");
                 bool goStopped = false;
                 lock (_lock)
@@ -264,8 +280,22 @@ namespace Sophon.Core
                 }
                 if (goAlarm)
                 {
-                    ReleaseAxes();
                     ApplyState(WorkStationState.Alarm, e.Message);
+                }
+            }
+            finally
+            {
+                bool release = false;
+                lock (_lock)
+                {
+                    if (generation == _generation)
+                    {
+                        release = true;
+                    }
+                }
+                if (release)
+                {
+                    ReleaseAxes();
                 }
             }
         }
@@ -311,7 +341,6 @@ namespace Sophon.Core
             }
             if (stopped)
             {
-                ReleaseAxes();
                 ApplyState(WorkStationState.Stopped);
             }
         }
@@ -349,7 +378,9 @@ namespace Sophon.Core
             }
         }
 
-        private void ApplyStoredGroup()
+        private void ApplyStoredGroup() => RefreshBoundAxesFromStore();
+
+        private void RefreshBoundAxesFromStore()
         {
             if (!string.IsNullOrWhiteSpace(AxisGroupName) && _axisGroupStore != null)
             {

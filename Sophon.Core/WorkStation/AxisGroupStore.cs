@@ -108,6 +108,11 @@ namespace Sophon.Core
                 throw new ArgumentException("轴组名不能为空", nameof(group));
             }
 
+            if (group.DistinctAxisIds().Count == 0)
+            {
+                throw new ArgumentException($"轴组「{group.GroupName}」必须至少绑定一根轴", nameof(group));
+            }
+
             lock (_lock)
             {
                 var list = LoadUnlocked();

@@ -42,10 +42,10 @@ namespace Sophon.Core
                 var profile = _profileStore?.Load()
                     .FirstOrDefault(p => string.Equals(p.StationName, name, System.StringComparison.Ordinal));
                 var options = profile == null
-                    ? WorkStationOptions.Cyclic(name)
+                    ? new WorkStationOptions { LoopRecipe = true, BoundFlowName = string.Empty }
                     : new WorkStationOptions
                     {
-                        BoundFlowName = string.IsNullOrWhiteSpace(profile.BoundFlowName) ? name : profile.BoundFlowName,
+                        BoundFlowName = profile.BoundFlowName,
                         LoopRecipe = profile.LoopRecipe,
                         AxisGroupName = profile.AxisGroupName
                     };

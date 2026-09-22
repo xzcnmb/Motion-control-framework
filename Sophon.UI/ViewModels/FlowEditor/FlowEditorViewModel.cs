@@ -63,7 +63,27 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public FlowNodeViewModel? SelectedNode
         {
             get => _selectedNode;
-            set => SetProperty(ref _selectedNode, value);
+            set
+            {
+                if (SetProperty(ref _selectedNode, value))
+                {
+                    foreach (var n in Nodes)
+                    {
+                        n.IsSelected = ReferenceEquals(n, value);
+                    }
+                    value?.ReloadPointParameters();
+                    RaisePropertyChanged(nameof(HasSelectedNode));
+                }
+            }
+        }
+
+        public bool HasSelectedNode => SelectedNode != null;
+
+        private string _statusHint = "选中节点后可在右侧改参数，改完点「保存」写入流程图。";
+        public string StatusHint
+        {
+            get => _statusHint;
+            set => SetProperty(ref _statusHint, value);
         }
 
         private Point _viewportLocation;
@@ -262,6 +282,11 @@ namespace Sophon.UI.ViewModels.FlowEditor
             conn.Target.IsConnected = Connections.Any(c => c.Target == conn.Target);
         }
 
+        private void AttachNode(FlowNodeViewModel node)
+        {
+            node.OnSelected = n => SelectedNode = n;
+        }
+
         private void ExecuteNewFlow()
         {
             Nodes.Clear();
@@ -271,6 +296,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
             // 自动添加初始 Start 节点
             var startNode = new FlowNodeViewModel("Start", "起始", new Point(120, 150));
+            AttachNode(startNode);
             Nodes.Add(startNode);
             SelectedNode = startNode;
             startNode.IsSelected = true;
@@ -295,6 +321,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
             }
 
             var nodeVm = new FlowNodeViewModel(item.NodeType, item.Name, new Point(x, y));
+            AttachNode(nodeVm);
             Nodes.Add(nodeVm);
 
             foreach (var n in Nodes) n.IsSelected = false;
@@ -362,6 +389,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
             foreach (var node in graph.Nodes)
             {
                 var nodeVm = new FlowNodeViewModel(node);
+                AttachNode(nodeVm);
                 Nodes.Add(nodeVm);
                 nodeDict[nodeVm.Id] = nodeVm;
 
@@ -418,7 +446,8 @@ namespace Sophon.UI.ViewModels.FlowEditor
             {
                 string path = FlowGraphStore.Save(graph);
                 RefreshSavedFlows();
-                Growl.Success($"流程已成功保存至：\n{path}");
+                Growl.Success($"已保存流程「{graph.FlowName}」（{graph.Nodes.Count} 个节点）\n{path}");
+                StatusHint = $"已保存 {DateTime.Now:HH:mm:ss}  {path}";
             }
             catch (Exception ex)
             {
@@ -654,6 +683,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public void OnNavigatedTo(NavigationContext navigationContext)
         {
             RefreshSavedFlows();
+            SelectedNode?.ReloadPointParameters();
         }
 
         public bool IsNavigationTarget(NavigationContext navigationContext) => true;
