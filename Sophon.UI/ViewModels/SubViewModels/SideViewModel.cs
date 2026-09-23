@@ -1,7 +1,10 @@
 #nullable enable
+using System;
+using Common;
 using HandyControl.Controls;
 using Prism.Commands;
 using Prism.Events;
+using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Navigation.Regions;
 using Sophon.Application;
@@ -16,6 +19,7 @@ namespace Sophon.UI.ViewModels
         private readonly INavigationGuardService _guardService;
         private readonly IUserContext _userContext;
         private readonly IEventAggregator _eventAggregator;
+        private readonly ILoggerFactory? _loggerFactory;
 
         public DelegateCommand<object> NavigateCommand { get; private set; }
 
@@ -47,6 +51,7 @@ namespace Sophon.UI.ViewModels
             _guardService = guardService;
             _userContext = userContext;
             _eventAggregator = eventAggregator;
+            _loggerFactory = TryResolve<ILoggerFactory>();
 
             NavigateCommand = new DelegateCommand<object>(ExecuteNavigate);
 
@@ -72,38 +77,61 @@ namespace Sophon.UI.ViewModels
                     return;
                 }
 
-                if (string.Equals(viewName, "HomeView", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    ShowHome();
-                    return;
-                }
-
-                _regionManager.RequestNavigate("ContentRegion", viewName);
+                NavigateContent(viewName);
             }
         }
 
-        public void ShowHome()
+        public void ShowHome() => NavigateContent("HomeView");
+
+        private void NavigateContent(string viewName, Action? onSuccess = null)
         {
-            try
+            _regionManager.RequestNavigate("ContentRegion", viewName, result =>
             {
-                if (!_regionManager.Regions.ContainsRegionWithName("ContentRegion"))
+                if (result.Success)
                 {
+                    onSuccess?.Invoke();
                     return;
                 }
 
-                var region = _regionManager.Regions["ContentRegion"];
-                var views = new System.Collections.Generic.List<object>();
-                foreach (var view in region.Views)
-                {
-                    views.Add(view);
-                }
-                foreach (var view in views)
-                {
-                    region.Remove(view);
-                }
+                // 导航失败只弹 Message 会丢掉现场（AlarmRegisterView 定位问题时看不到 inner exception / stack）。
+                // Growl 文案仍取最深 InnerException 的 Message，完整异常走日志，不静默、不吞。
+                string logDetail = result.Exception?.ToString() ?? "导航结果未携带 Exception";
+                string logMessage = $"导航到 {viewName} 失败：{logDetail}";
+                _loggerFactory?.CreateLogger("SideViewModel").Error(logMessage);
+                System.Diagnostics.Debug.WriteLine($"[SideViewModel] {logMessage}");
+
+                Growl.Error($"无法打开页面 {viewName}：{DescribeNavigationError(result.Exception)}");
+            });
+        }
+
+        /// <summary>
+        /// 取异常链最深处的 Message 作为用户可见文案；无异常时保持原「未知原因」口径。
+        /// </summary>
+        private static string DescribeNavigationError(Exception? ex)
+        {
+            if (ex == null)
+            {
+                return "未知原因";
+            }
+
+            Exception deepest = ex;
+            while (deepest.InnerException != null)
+            {
+                deepest = deepest.InnerException;
+            }
+
+            return deepest.Message;
+        }
+
+        private static T? TryResolve<T>() where T : class
+        {
+            try
+            {
+                return ContainerLocator.Container.Resolve<T>();
             }
             catch
             {
+                return null;
             }
         }
 

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Windows;
 using System.Windows.Media;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -286,7 +287,15 @@ namespace Sophon.UI.ViewModels.Axis
 
         private void ExecuteAbort()
         {
-            _axisManager.Abort(AxisId);
+            var result = MessageBox.Show(
+                $"确认对轴 {AxisId}（{Name}）执行急停？\n急停会进入故障锁定，恢复前需要现场确认并复位。",
+                "确认急停",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result == MessageBoxResult.Yes)
+            {
+                _axisManager.Abort(AxisId);
+            }
         }
 
         private void ExecuteMoveAbs()
@@ -296,7 +305,20 @@ namespace Sophon.UI.ViewModels.Axis
 
         private void ExecuteMoveRel()
         {
-            _axisManager.Controller.MoveRel(AxisId, RelativeDistance, MoveSpeed, MoveAccel, MoveDecel);
+            var current = _axisManager.GetSnapshot(AxisId);
+            if (current == null || double.IsNaN(current.Position) || double.IsInfinity(current.Position))
+            {
+                throw new InvalidOperationException($"轴 {AxisId} 当前坐标无效，拒绝相对定位");
+            }
+
+            double target = current.Position + RelativeDistance;
+            if (_definition.SoftLimitEnabled &&
+                (target < _definition.SoftLimitMin || target > _definition.SoftLimitMax))
+            {
+                throw new InvalidOperationException($"轴 {AxisId} 相对定位目标 {target:F3} 超出软限位范围");
+            }
+
+            _axisManager.MoveAbs(AxisId, target, MoveSpeed, MoveAccel, MoveDecel);
         }
 
         private void ExecuteClearAlarms()

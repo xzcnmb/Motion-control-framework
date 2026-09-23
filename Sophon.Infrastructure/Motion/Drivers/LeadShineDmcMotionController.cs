@@ -495,15 +495,8 @@ namespace Sophon.Infrastructure.Motion.Drivers
 
         public void ResetAxis(int axisId)
         {
-            try
-            {
-                try
-                {
-                    LeadShineDmcNative.dmc_set_position(0, (ushort)axisId, 0);
-                }
-                catch (DllNotFoundException) { }
-            }
-            catch { }
+            throw new NotSupportedException(
+                "雷赛 DMC 驱动骨架尚未实现安全的报警复位 API；为避免把置零坐标误当成复位，当前操作被拒绝 (未经真机验证)");
         }
 
         private void MonitorLoop()

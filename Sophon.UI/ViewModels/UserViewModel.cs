@@ -201,12 +201,11 @@ namespace Sophon.UI.ViewModels
 
                 if (string.IsNullOrEmpty(password))
                 {
-                    Notify("请输入密码（出厂默认: 123）");
+                    Notify("请输入密码");
                     return;
                 }
 
-                string storedPassword = _userRepository.GetPasswordByUserName(UserName);
-                if (!string.IsNullOrEmpty(storedPassword) && password == storedPassword)
+                if (_userRepository.VerifyPassword(UserName, password, out _))
                 {
                     _userContext.ApplyLogin(UserName);
                     _eventAggregator.GetEvent<UserChangeEvent>().Publish(UserName);
@@ -215,7 +214,7 @@ namespace Sophon.UI.ViewModels
                     return;
                 }
 
-                Notify("用户名或密码错误（出厂默认密码: 123）");
+                Notify("用户名或密码错误");
                 passwordBox?.Clear();
                 UpdateUI();
             }

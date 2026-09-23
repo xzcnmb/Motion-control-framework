@@ -10,6 +10,9 @@ using Xunit;
 
 namespace Sophon.Core.Tests
 {
+    // 与 FlowV2_ControlFlowTests、FlowV2_ParallelJoinLoopTests 共用同一 Collection：
+    // 本类也会改写进程级全局 FlowGraphStore.DefaultBaseDirectory，串行执行避免互相翻转全局目录。
+    [Collection("FlowGraphStore")]
     public class FlowV2_HardwareNodeTests
     {
         #region Fake 控制器实现

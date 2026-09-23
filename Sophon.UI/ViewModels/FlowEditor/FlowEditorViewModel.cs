@@ -11,10 +11,13 @@ using Common;
 using HandyControl.Controls;
 using Microsoft.Win32;
 using Prism.Commands;
+using Prism.Events;
+using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Navigation.Regions;
 using Sophon.Contracts;
 using Sophon.Core;
+using Sophon.Core.Event;
 using Sophon.Core.Flow.V2;
 
 namespace Sophon.UI.ViewModels.FlowEditor
@@ -31,15 +34,47 @@ namespace Sophon.UI.ViewModels.FlowEditor
         private CancellationTokenSource? _runCts;
         private bool _isDisposed;
 
+        /// <summary>侧边栏「流程编辑」节点面板的订阅令牌；VM 经 IsNavigationTarget 复用，ctor 只跑一次。</summary>
+        private SubscriptionToken? _addNodeToken;
+        private IEventAggregator? _eventAggregator;
+
         private string _flowName = "未命名流程";
         public string FlowName
         {
             get => _flowName;
-            set => SetProperty(ref _flowName, value);
+            set
+            {
+                if (SetProperty(ref _flowName, value))
+                {
+                    IsDirty = true;
+                }
+            }
         }
 
+        private bool _isDirty;
+        /// <summary>是否存在未保存修改。用于新建/打开/导入前的丢弃确认，以及切换已存流程下拉时的回退。</summary>
+        public bool IsDirty
+        {
+            get => _isDirty;
+            set => SetProperty(ref _isDirty, value);
+        }
+
+        private bool _suppressSavedFlowReload;
+
+        /// <summary>当前画布上承载的已存流程名（LoadGraph 成功时更新；新建/无文件来源时为 null）。
+        /// 运行中拒绝切换已存流程时，用它把下拉框静默选回原项。</summary>
+        private string? _loadedFlowName;
+
         public ObservableCollection<FlowNodeViewModel> Nodes { get; } = new();
-        public ObservableCollection<FlowNodeViewModel> SelectedNodes { get; } = new();
+
+        private ObservableCollection<FlowNodeViewModel> _selectedNodes = new();
+        // NodifyEditor.SelectedItems 绑定为 TwoWay，源属性必须可写，不能改回 { get; }。
+        public ObservableCollection<FlowNodeViewModel> SelectedNodes
+        {
+            get => _selectedNodes;
+            set => SetProperty(ref _selectedNodes, value);
+        }
+
         public ObservableCollection<FlowConnectionViewModel> Connections { get; } = new();
         public PendingConnectionViewModel PendingConnection { get; }
 
@@ -53,10 +88,41 @@ namespace Sophon.UI.ViewModels.FlowEditor
             get => _selectedSavedFlow;
             set
             {
-                if (SetProperty(ref _selectedSavedFlow, value) && !string.IsNullOrWhiteSpace(value))
+                // 回退选中项时静默更新字段，禁止递归触发 OpenSavedFlow
+                if (_suppressSavedFlowReload)
                 {
-                    OpenSavedFlow(value);
+                    _selectedSavedFlow = value;
+                    RaisePropertyChanged(nameof(SelectedSavedFlow));
+                    return;
                 }
+
+                var previous = _selectedSavedFlow;
+                if (!SetProperty(ref _selectedSavedFlow, value))
+                {
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return;
+                }
+
+                if (!ConfirmDiscardIfDirty())
+                {
+                    // 用户取消：把下拉框选回之前已加载的流程，不递归、不加载
+                    _suppressSavedFlowReload = true;
+                    try
+                    {
+                        _selectedSavedFlow = previous;
+                        RaisePropertyChanged(nameof(SelectedSavedFlow));
+                    }
+                    finally
+                    {
+                        _suppressSavedFlowReload = false;
+                    }
+                    return;
+                }
+
+                OpenSavedFlow(value);
             }
         }
 
@@ -76,6 +142,14 @@ namespace Sophon.UI.ViewModels.FlowEditor
         }
 
         public bool HasSelectedNode => SelectedNode != null;
+
+        private bool _isInspectorCollapsed;
+        /// <summary>右侧节点面板是否收起为细条。收起时右侧列宽被压到 28px 左右，画布获得原本被面板占掉的宽度。</summary>
+        public bool IsInspectorCollapsed
+        {
+            get => _isInspectorCollapsed;
+            set => SetProperty(ref _isInspectorCollapsed, value);
+        }
 
         private string _statusHint = "选中节点后可在右侧改参数，改完点「保存」写入流程图。";
         public string StatusHint
@@ -142,6 +216,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public DelegateCommand<ToolboxItemViewModel> AddNodeCommand { get; }
         public DelegateCommand DeleteSelectedCommand { get; }
         public DelegateCommand<FlowNodeViewModel> DeleteNodeCommand { get; }
+        public DelegateCommand<FlowConnectionViewModel> RemoveConnectionCommand { get; }
         public DelegateCommand ExportProjectCommand { get; }
         public DelegateCommand ImportProjectCommand { get; }
         public DelegateCommand RunFlowCommand { get; }
@@ -150,18 +225,14 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public DelegateCommand StopFlowCommand { get; }
         public DelegateCommand ClearLogsCommand { get; }
 
-        public FlowEditorViewModel(
-            IMotionController? motionController = null,
-            IIoController? ioController = null,
-            IEventBus? eventBus = null,
-            ILoggerFactory? loggerFactory = null,
-            IServiceProvider? services = null)
+        public FlowEditorViewModel()
         {
-            _motionController = motionController;
-            _ioController = ioController;
-            _eventBus = eventBus;
-            _loggerFactory = loggerFactory;
-            _services = services;
+            _motionController = TryResolve<IMotionController>();
+            _ioController = TryResolve<IIoController>();
+            _eventBus = TryResolve<IEventBus>();
+            _loggerFactory = TryResolve<ILoggerFactory>();
+            _services = TryResolve<IServiceProvider>();
+            _eventAggregator = TryResolve<IEventAggregator>();
 
             PendingConnection = new PendingConnectionViewModel(this);
 
@@ -174,6 +245,11 @@ namespace Sophon.UI.ViewModels.FlowEditor
             DeleteSelectedCommand = new DelegateCommand(ExecuteDeleteSelected, () => HasSelectedNode)
                 .ObservesProperty(() => HasSelectedNode);
             DeleteNodeCommand = new DelegateCommand<FlowNodeViewModel>(ExecuteDeleteNode);
+            RemoveConnectionCommand = new DelegateCommand<FlowConnectionViewModel>(conn =>
+            {
+                if (BlockIfRunning()) return;
+                if (conn != null) DisconnectConnection(conn);
+            });
             ExportProjectCommand = new DelegateCommand(ExecuteExportProject);
             ImportProjectCommand = new DelegateCommand(ExecuteImportProject);
             RunFlowCommand = new DelegateCommand(async () => await ExecuteRunFlowAsync(), () => CanRun).ObservesProperty(() => CanRun);
@@ -185,6 +261,32 @@ namespace Sophon.UI.ViewModels.FlowEditor
             InitializeToolbox();
             RefreshSavedFlows();
             ExecuteNewFlow();
+
+            // 侧边栏「流程编辑」节点面板 → 画布的唯一通道。VM 经 IsNavigationTarget 复用，
+            // 这里只在构造时订阅一次，切勿改到 OnNavigatedTo（会重复订阅）。
+            if (_eventAggregator == null)
+            {
+                // 拿不到事件总线：侧边栏点节点将无声失效，必须留下可查的痕迹（不抛，VM 仍可用）。
+                string message = "IEventAggregator 未解析，侧边栏添加节点将失效";
+                _loggerFactory?.CreateLogger("FlowEditorViewModel").Error(message);
+                System.Diagnostics.Debug.WriteLine($"[FlowEditorViewModel] {message}");
+            }
+            else
+            {
+                _addNodeToken = _eventAggregator.GetEvent<AddFlowNodeEvent>().Subscribe(AddNodeByType, ThreadOption.UIThread);
+            }
+        }
+
+        private static T? TryResolve<T>() where T : class
+        {
+            try
+            {
+                return Prism.Ioc.ContainerLocator.Container.Resolve<T>();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void InitializeToolbox()
@@ -246,6 +348,8 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         public void ConnectPorts(FlowPortViewModel source, FlowPortViewModel target)
         {
+            if (BlockIfRunning()) return;
+
             // 端口连线校验：源必须为 Out，目标必须为 In，不能连接同节点，避免重复连线
             if (source.Direction != FlowPortDirection.Out || target.Direction != FlowPortDirection.In)
             {
@@ -278,6 +382,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
             Connections.Add(conn);
             source.IsConnected = true;
             target.IsConnected = true;
+            IsDirty = true;
         }
 
         public void DisconnectConnection(FlowConnectionViewModel conn)
@@ -285,6 +390,33 @@ namespace Sophon.UI.ViewModels.FlowEditor
             Connections.Remove(conn);
             conn.Source.IsConnected = Connections.Any(c => c.Source == conn.Source);
             conn.Target.IsConnected = Connections.Any(c => c.Target == conn.Target);
+            IsDirty = true;
+        }
+
+        /// <summary>运行中禁止编辑画布。返回 true 表示已拦截（并弹提示）。</summary>
+        private bool BlockIfRunning()
+        {
+            if (IsRunning)
+            {
+                Growl.Warning("流程运行中不可编辑，请先停止");
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>有未保存修改时提示是否放弃；无修改或用户确认返回 true。</summary>
+        private bool ConfirmDiscardIfDirty()
+        {
+            if (!IsDirty)
+            {
+                return true;
+            }
+            var result = System.Windows.MessageBox.Show(
+                "当前流程有未保存修改，确定放弃吗？",
+                "未保存修改",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            return result == MessageBoxResult.Yes;
         }
 
         private void AttachNode(FlowNodeViewModel node)
@@ -303,6 +435,8 @@ namespace Sophon.UI.ViewModels.FlowEditor
                     SelectedNode = SelectedNodes.FirstOrDefault(x => !ReferenceEquals(x, n));
                 }
             };
+            // 节点改名/拖动/改参数都应在未保存修改之列，否则新建/切换流程时会静默丢失编辑
+            node.OnEdited = _ => IsDirty = true;
         }
 
         public void SelectOnly(FlowNodeViewModel? node)
@@ -317,9 +451,13 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         private void ExecuteNewFlow()
         {
+            if (BlockIfRunning()) return;
+            if (!ConfirmDiscardIfDirty()) return;
+
             Nodes.Clear();
             Connections.Clear();
             RunLogs.Clear();
+            _loadedFlowName = null;
             FlowName = "新建流程_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
             // 自动添加初始 Start 节点
@@ -327,10 +465,13 @@ namespace Sophon.UI.ViewModels.FlowEditor
             AttachNode(startNode);
             Nodes.Add(startNode);
             SelectOnly(startNode);
+
+            IsDirty = false;
         }
 
         private void ExecuteAddNode(ToolboxItemViewModel? item)
         {
+            if (BlockIfRunning()) return;
             if (item == null) return;
 
             double x = 300;
@@ -351,10 +492,42 @@ namespace Sophon.UI.ViewModels.FlowEditor
             AttachNode(nodeVm);
             Nodes.Add(nodeVm);
             SelectOnly(nodeVm);
+
+            IsDirty = true;
+        }
+
+        /// <summary>
+        /// 侧边栏「流程编辑」节点面板点击后由 <see cref="AddFlowNodeEvent"/> 回调到这里。
+        /// 复用 <see cref="ExecuteAddNode"/> 的定位、挂钩、选中与 IsDirty 逻辑（含运行中拦截）。
+        /// 未注册的节点类型会被 FlowNodeRegistry 兜底成无参数默认节点，不会抛异常。
+        /// </summary>
+        public void AddNodeByType(string? nodeType)
+        {
+            if (string.IsNullOrWhiteSpace(nodeType))
+            {
+                return;
+            }
+
+            string? resolvedName = FlowNodeRegistry.Create(nodeType)?.Name;
+            if (string.IsNullOrWhiteSpace(resolvedName))
+            {
+                resolvedName = nodeType;
+            }
+
+            ExecuteAddNode(new ToolboxItemViewModel
+            {
+                NodeType = nodeType,
+                Name = resolvedName,
+                Category = FlowNodeViewModel.GetCategoryForType(nodeType),
+                CategoryBrush = FlowNodeViewModel.GetBrushForCategory(FlowNodeViewModel.GetCategoryForType(nodeType)),
+                Description = $"{resolvedName} ({nodeType})"
+            });
         }
 
         private void ExecuteDeleteSelected()
         {
+            if (BlockIfRunning()) return;
+
             var selectedList = Nodes.Where(n => n.IsSelected).ToList();
             if (selectedList.Count == 0 && SelectedNode != null)
             {
@@ -367,6 +540,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 return;
             }
 
+            bool removed = false;
             foreach (var node in selectedList)
             {
                 if (string.Equals(node.NodeType, "Start", StringComparison.OrdinalIgnoreCase)
@@ -383,15 +557,23 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 }
                 node.OnSelected = null;
                 node.OnDeselected = null;
+                node.OnEdited = null;
                 node.ClearSelected();
                 Nodes.Remove(node);
+                removed = true;
             }
 
             SelectOnly(Nodes.FirstOrDefault());
+
+            if (removed)
+            {
+                IsDirty = true;
+            }
         }
 
         private void ExecuteDeleteNode(FlowNodeViewModel? node)
         {
+            if (BlockIfRunning()) return;
             if (node == null)
             {
                 return;
@@ -410,12 +592,15 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 DisconnectConnection(conn);
             }
             node.OnSelected = null;
+            node.OnEdited = null;
             node.ClearSelected();
             Nodes.Remove(node);
             if (ReferenceEquals(SelectedNode, node))
             {
                 SelectOnly(Nodes.FirstOrDefault());
             }
+
+            IsDirty = true;
         }
 
         public FlowGraph BuildGraph()
@@ -448,6 +633,8 @@ namespace Sophon.UI.ViewModels.FlowEditor
             RunLogs.Clear();
 
             FlowName = graph.FlowName;
+            // 记录画布当前承载的流程名，供运行中拒绝切换下拉时回退选中项
+            _loadedFlowName = graph.FlowName;
 
             var nodeDict = new Dictionary<string, FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
             var portDict = new Dictionary<string, FlowPortViewModel>(StringComparer.OrdinalIgnoreCase);
@@ -466,6 +653,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 foreach (var p in nodeVm.OutputPorts) portDict[$"{nodeVm.Id}:{p.Name}"] = p;
             }
 
+            int droppedConnections = 0;
             foreach (var conn in graph.Connections)
             {
                 FlowPortViewModel? sourcePort = null;
@@ -481,9 +669,21 @@ namespace Sophon.UI.ViewModels.FlowEditor
                     sourcePort.IsConnected = true;
                     targetPort.IsConnected = true;
                 }
+                else
+                {
+                    droppedConnections++;
+                }
+            }
+
+            if (droppedConnections > 0)
+            {
+                RunLogs.Add(new FlowLogItemViewModel("流程加载", "Load", FlowNodeState.Skipped, $"有 {droppedConnections} 条连线因端口缺失被忽略"));
+                Growl.Warning($"有 {droppedConnections} 条连线因端口缺失被忽略");
             }
 
             SelectOnly(Nodes.FirstOrDefault());
+
+            IsDirty = false;
         }
 
         private void ExecuteSaveFlow()
@@ -510,9 +710,12 @@ namespace Sophon.UI.ViewModels.FlowEditor
             try
             {
                 string path = FlowGraphStore.Save(graph);
+                // Save 内部会净化流程名，文本框同步显示实际落盘的名字（净化可能改名）
+                FlowName = graph.FlowName;
                 RefreshSavedFlows();
                 Growl.Success($"已保存流程「{graph.FlowName}」（{graph.Nodes.Count} 个节点）\n{path}");
                 StatusHint = $"已保存 {DateTime.Now:HH:mm:ss}  {path}";
+                IsDirty = false;
             }
             catch (Exception ex)
             {
@@ -522,6 +725,13 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         private void OpenSavedFlow(string flowName)
         {
+            // 运行中禁止切换已存流程：LoadGraph 会清空画布，与正在执行的流程脱节
+            if (BlockIfRunning())
+            {
+                RevertSavedFlowSelection();
+                return;
+            }
+
             try
             {
                 var graph = FlowGraphStore.Load(flowName);
@@ -541,8 +751,28 @@ namespace Sophon.UI.ViewModels.FlowEditor
             }
         }
 
+        /// <summary>
+        /// 把已存流程下拉静默选回当前画布上的流程（经 <see cref="_suppressSavedFlowReload"/> 短路，不会递归触发 OpenSavedFlow）。
+        /// </summary>
+        private void RevertSavedFlowSelection()
+        {
+            _suppressSavedFlowReload = true;
+            try
+            {
+                _selectedSavedFlow = _loadedFlowName;
+                RaisePropertyChanged(nameof(SelectedSavedFlow));
+            }
+            finally
+            {
+                _suppressSavedFlowReload = false;
+            }
+        }
+
         private void ExecuteOpenFlow()
         {
+            if (BlockIfRunning()) return;
+            if (!ConfirmDiscardIfDirty()) return;
+
             var dlg = new OpenFileDialog
             {
                 Title = "打开流程图 JSON 文件",
@@ -622,6 +852,9 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         private void ExecuteImportProject()
         {
+            if (BlockIfRunning()) return;
+            if (!ConfirmDiscardIfDirty()) return;
+
             var dlg = new OpenFileDialog
             {
                 Title = "导入流程工程",
@@ -635,11 +868,12 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
             try
             {
-                var preview = FlowGraphStore.ImportFrom(dlg.FileName, save: false);
-                if (FlowGraphStore.ListFlowNames().Contains(preview.FlowName))
+                // 只解析/校验一次，避免 ImportFrom 被调用两遍
+                var graph = FlowGraphStore.ImportFrom(dlg.FileName, save: false);
+                if (FlowGraphStore.ListFlowNames().Contains(graph.FlowName))
                 {
                     var overwrite = System.Windows.MessageBox.Show(
-                        $"流程库已有「{preview.FlowName}」，导入将覆盖。是否继续？",
+                        $"流程库已有「{graph.FlowName}」，导入将覆盖。是否继续？",
                         "覆盖确认",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Warning);
@@ -649,7 +883,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
                     }
                 }
 
-                var graph = FlowGraphStore.ImportFrom(dlg.FileName);
+                FlowGraphStore.Save(graph);
                 LoadGraph(graph);
                 RefreshSavedFlows();
                 Growl.Success($"已导入工程「{graph.FlowName}」，并写入流程库。工站可绑定该配方。");
@@ -678,6 +912,9 @@ namespace Sophon.UI.ViewModels.FlowEditor
 
         private void ExecuteImportV1()
         {
+            if (BlockIfRunning()) return;
+            if (!ConfirmDiscardIfDirty()) return;
+
             var dlg = new OpenFileDialog
             {
                 Title = "导入旧版 V1 流程 JSON",
@@ -839,6 +1076,12 @@ namespace Sophon.UI.ViewModels.FlowEditor
                 if (_engine != null)
                 {
                     _engine.NodeStateChanged -= OnNodeStateChanged;
+                }
+
+                if (_addNodeToken != null && _eventAggregator != null)
+                {
+                    _eventAggregator.GetEvent<AddFlowNodeEvent>().Unsubscribe(_addNodeToken);
+                    _addNodeToken = null;
                 }
             }
         }

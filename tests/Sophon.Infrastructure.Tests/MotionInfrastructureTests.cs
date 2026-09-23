@@ -172,7 +172,7 @@ namespace Sophon.Infrastructure.Tests
             var homeTcs = new TaskCompletionSource<AxisDoneArgs>();
             controller.AxisDone += args => homeTcs.TrySetResult(args);
 
-            var reqId = controller.Home(0, HomingMode.OriginSignal, HomeDirection.Negative, 100.0);
+            var reqId = controller.Home(0, HomingMode.CurrentPosition, HomeDirection.Negative, 100.0);
 
             var completed = await Task.WhenAny(homeTcs.Task, Task.Delay(2500));
             Assert.Same(homeTcs.Task, completed);
@@ -375,6 +375,100 @@ namespace Sophon.Infrastructure.Tests
             Assert.Equal(DriverKind.Simulated, controller.Kind);
             Assert.NotNull(warningLog);
             Assert.Contains("降级到仿真控制器", warningLog);
+        }
+
+        [Fact]
+        public void Create_LeadShineEtherCAT_ShouldThrowNotSupported_WithoutOpeningPulseDll()
+        {
+            var ex = Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.LeadShineEtherCAT));
+            Assert.Contains("EtherCAT", ex.Message);
+            Assert.Contains("LTDMC", ex.Message);
+        }
+
+        [Fact]
+        public void Create_GoogolGen_ShouldThrowNotSupported_WithoutOpeningGtsDll()
+        {
+            var ex = Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.GoogolGen));
+            Assert.Contains("GEN", ex.Message);
+            Assert.Contains("GTS", ex.Message);
+        }
+
+        [Fact]
+        public void Create_GoogolGe_ShouldThrowNotSupported_WithoutOpeningGtsDll()
+        {
+            Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.GoogolGe));
+        }
+
+        [Fact]
+        public void Create_ZmotionEtherCAT_ShouldThrowNotSupported()
+        {
+            Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.ZmotionEtherCAT));
+        }
+
+        [Fact]
+        public void Create_ZmotionZmc_ShouldThrowNotSupported()
+        {
+            Assert.Throws<NotSupportedException>(() =>
+                MotionControllerFactory.Create(DriverKind.ZmotionZmc));
+        }
+
+        [Fact]
+        public void MotionCardIoBridge_RejectsUnimplementedDrivers_InsteadOfUsingPulseDll()
+        {
+            foreach (var driver in new[]
+                     {
+                         DriverKind.LeadShineEtherCAT,
+                         DriverKind.GoogolGen,
+                         DriverKind.GoogolGe,
+                         DriverKind.ZmotionZmc,
+                         DriverKind.ZmotionEtherCAT
+                     })
+            {
+                Assert.Throws<NotSupportedException>(() => MotionCardIoBridge.CreateDiReader(driver));
+                Assert.Throws<NotSupportedException>(() => MotionCardIoBridge.CreateDoWriter(driver));
+            }
+        }
+    }
+
+    public class MotionCardIoBridgeTests
+    {
+        [Fact]
+        public void SimulatedDriver_ShouldReadWriteSimIo_InsteadOfVendorDll()
+        {
+            var diReader = MotionCardIoBridge.CreateDiReader(DriverKind.Simulated);
+            var doWriter = MotionCardIoBridge.CreateDoWriter(DriverKind.Simulated);
+
+            Assert.False(diReader(0, 3));
+
+            MotionCardIoBridge.SimulatedIo.SetDi("DI0_3", true);
+            Assert.True(diReader(0, 3));
+            MotionCardIoBridge.SimulatedIo.SetDi("DI0_3", false);
+            Assert.False(diReader(0, 3));
+
+            doWriter(0, 1, true);
+            Assert.True(MotionCardIoBridge.SimulatedIo.SnapshotDo()["DO0_1"]);
+        }
+
+        [Fact]
+        public void RealDrivers_ShouldFailVisibly_AndNeverReadSimIo()
+        {
+            // 仿真 IO 已置真：GTS/DMC 的读写既不能读到这些仿真值，也不许静默返回 false 伪装成功。
+            MotionCardIoBridge.SimulatedIo.SetDi("DI0_0", true);
+
+            foreach (var driver in new[] { DriverKind.GoogolGts, DriverKind.LeadShineDmc })
+            {
+                var diReader = MotionCardIoBridge.CreateDiReader(driver);
+                var doWriter = MotionCardIoBridge.CreateDoWriter(driver);
+
+                Assert.Throws<InvalidOperationException>(() => diReader(0, 0));
+                Assert.Throws<InvalidOperationException>(() => doWriter(0, 0, true));
+            }
+
+            MotionCardIoBridge.SimulatedIo.SetDi("DI0_0", false);
         }
     }
 

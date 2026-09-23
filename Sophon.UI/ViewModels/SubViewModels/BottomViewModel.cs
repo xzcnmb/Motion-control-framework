@@ -95,16 +95,22 @@ namespace Sophon.UI.ViewModels
             }
         }
 
+        private static string ControlCardStatusFallback(DriverKind? kind) => kind.HasValue
+            ? MotionCardCatalog.Display(kind.Value) + "（未接入）已连接"
+            : "控制卡已连接";
+
         private void ApplyHardwareStatus(DriverKind? kind, ConnectionState state)
         {
             switch (state)
             {
                 case ConnectionState.Ready:
-                    HardwareStatus = kind == DriverKind.GoogolGts
-                        ? "固高 GTS 已连接"
-                        : kind == DriverKind.LeadShineDmc
-                            ? "雷赛 DMC 已连接"
-                            : "控制卡已连接";
+                    HardwareStatus = kind switch
+                    {
+                        DriverKind.GoogolGts => "固高 GTS 脉冲卡已连接",
+                        DriverKind.LeadShineDmc => "雷赛 DMC 脉冲卡已连接",
+                        DriverKind.Simulated => "仿真控制器已就绪",
+                        _ => ControlCardStatusFallback(kind)
+                    };
                     HardwareBadgeBackground = "#F6FFED";
                     HardwareBadgeBorder = "#B7EB8F";
                     HardwareBadgeDot = "#389E0D";

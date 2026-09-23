@@ -30,6 +30,7 @@
 2. 允许反向点动退离限位区；
 3. 复位门禁：`TryResetLimit` 先读限位 DI 电平，仍处触发态则拒绝复位；
 4. 复位成功 → 清除 `HARD_LIMIT_ESTOP` → 工站 Alarm → Idle。
+5. UI 的“报警复位/限位复位”不是安全动作替代品；必须先确认 DI 已离开触发电平，且真卡驱动报警已由现场设备复位。
 
 ## 5. 报警联动矩阵
 
@@ -37,7 +38,7 @@
 |---|---|---|
 | `HARD_LIMIT_ESTOP` | EStop | AbortAll + 工站 Alarm |
 | `SOFT_LIMIT_ERROR` | Error | 单轴 StopMotion |
-| `WATCHDOG_TIMEOUT` | Error | StopAllAxes |
+| `WATCHDOG_TIMEOUT` | Error | `StopAllAxes`（Cat1 `AxisManager.StopAll`，不得升级为急停） |
 | 自定义（AlarmDefinition） | 可配 | None/StopAxis/StopAllAxes/StopFlow/EStopAll |
 
 ## 6. 已验证场景（自动化测试）
@@ -49,4 +50,12 @@
 
 ## 7. 真机联调检查单（固高/雷赛首验必做）
 
-1. 卡内硬限位输入启用（us 级）；2. 急停按钮硬接线验证；3. 使能/报警清除/到位信号时序；4. 断线后卡级停车策略；5. 回零模式与原点传感器方向核对；6. 软限位与行程余量复核。
+1. 卡内硬限位输入启用（us 级）；2. 急停按钮硬接线验证；3. 使能/报警清除/到位信号时序；4. 断线后卡级停车策略；5. 回零模式与原点传感器方向核对；6. 软限位与行程余量复核；7. 正反向点动和限位退离方向；8. DI/DO 通信失败必须进入故障，不得伪装成未触发。
+
+## 8. 当前未验证边界
+
+- GTS/DMC 适配器仍标记 `IsFieldVerified=false`，未完成的卡内到位/回零回报不得视为生产能力。
+- DMC `ResetAxis` 在没有确认厂商报警清除 API 前明确拒绝执行，禁止用设置坐标为 0 代替故障复位。
+- Sim 仅用于离线链路验证，不能证明真实卡的方向、限位时序、断线和 STO 行为。
+- 总线卡 / GEN / GE / DMC-E / EMC / PAC / ZMC 等型号未接入适配器时，选型、启动、DI/DO 均显式拒绝（`MotionCardCatalog.NotImplementedMessage` → `NotSupportedException`）：禁止当成脉冲卡用 gts.dll/LTDMC.dll 打开，也禁止在没有适配器时静默回退 Sim。
+- 真卡（GTS/DMC）创建失败默认抛 `InvalidOperationException` 并写日志（`MotionControllerFactory`，`NeverSilentlyFallbackToSim`）；只有显式传 `allowSimFallback: true` 才允许降级到仿真控制器，日志会记录该次降级警告——现场禁止开启。

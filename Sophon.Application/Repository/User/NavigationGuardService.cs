@@ -32,11 +32,11 @@ namespace Sophon.Application
     {
         private readonly IUserContext _userContext;
 
-        // 工业三级权限视图矩阵：
-        // None / Public: 任何人可访问（看板、登录、报警概览）
-        // Operator: 操作员级别（生产查看、历史追溯、相机取景监视）
-        // Engineer: 工程师级别（轴调试、点位示教、流程画布、标定向导、气动外设控制、IO映射）
-        // Admin: 管理员级别（控制卡底层档案、系统核心工艺参数）
+        // 工业权限视图矩阵（中文文案，按视图声明所需最低权限）：
+        // 未登录/访客：任何人可访问（看板、登录、报警概览）
+        // 操作员：产线运行查看、历史追溯、相机取景监视、限位监控
+        // 工程师：轴调试、点位示教、流程画布、标定向导、气动外设控制、IO映射
+        // 管理员：板卡选型与轴档案、核心工艺参数
         private static readonly Dictionary<string, UserLevel> ViewPermissions = new(StringComparer.OrdinalIgnoreCase)
         {
             // 公开视图
@@ -115,7 +115,7 @@ namespace Sophon.Application
             "AxisDebugView" => "单轴/多轴硬件调试",
             "TeachView" => "点位示教与轨迹",
             "FlowEditorView" => "可视化流程编辑",
-            "MotionCardConfigView" => "控制卡与轴参数配置",
+            "MotionCardConfigView" => "板卡选型与轴参数配置（按厂商/接口/系列/型号选择控制卡）",
             "DeviceControlView" => "气动与485外设总控",
             "ProtocolInfrastructureView" => "外设与气缸档案配置",
             "IOInfrastructureView" => "IO点位映射与强制调试",

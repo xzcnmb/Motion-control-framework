@@ -11,6 +11,8 @@ namespace Sophon.Infrastructure
 
         string GetPasswordByUserName(string name);
 
+        bool VerifyPassword(string name, string password, out bool migratedLegacyPassword);
+
         UserLevel GetLevelByUserName(string name);
 
         bool ChangePassword(string name, string newPassword);

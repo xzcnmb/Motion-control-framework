@@ -19,18 +19,32 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public string Name
         {
             get => _name;
-            set => SetProperty(ref _name, value);
+            set
+            {
+                if (SetProperty(ref _name, value))
+                {
+                    OnEdited?.Invoke(this);
+                }
+            }
         }
 
         private Point _location;
         public Point Location
         {
             get => _location;
-            set => SetProperty(ref _location, value);
+            set
+            {
+                if (SetProperty(ref _location, value))
+                {
+                    OnEdited?.Invoke(this);
+                }
+            }
         }
 
         public Action<FlowNodeViewModel>? OnSelected { get; set; }
         public Action<FlowNodeViewModel>? OnDeselected { get; set; }
+        /// <summary>节点内容被编辑（改名/拖动/改参数）时触发，供编辑器标记 IsDirty。构造期不触发（钩子尚未挂上）。</summary>
+        public Action<FlowNodeViewModel>? OnEdited { get; set; }
 
         private bool _syncingSelection;
         private bool _isSelected;
@@ -240,6 +254,7 @@ namespace Sophon.UI.ViewModels.FlowEditor
         public void UpdateParameter(string name, object? value)
         {
             Parameters[name] = value;
+            OnEdited?.Invoke(this);
         }
 
         public void ReloadPointParameters()

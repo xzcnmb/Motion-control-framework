@@ -12,15 +12,23 @@ namespace Common
         private readonly ConcurrentDictionary<string, IConfigManager> configManagercache = new ConcurrentDictionary<string, IConfigManager>();
 
         private readonly string _configPath = ConfigurationManager.AppSettings["ConfigPath"];
-        private IConfigSerializer _configSerializer;
+        private readonly object _serializerLock = new();
 
         public IConfigManager CreateConfigManager(ConfigType type, string filename, string secondPath = "")
         {
-            _configSerializer = CreateSerializer(type);
+            IConfigSerializer serializer;
+            lock (_serializerLock)
+            {
+                serializer = CreateSerializer(type);
+            }
 
-            string path = PathResolver.GetAbsolutePath(_configPath);
+            string path = string.IsNullOrWhiteSpace(_configPath)
+                ? Path.Combine(PathResolver.GetRuntimeDataDirectory(), "config")
+                : PathResolver.GetAbsolutePath(_configPath);
 
-            return configManagercache.GetOrAdd(filename, new ConfigManager(_configSerializer, Path.Combine(path, secondPath, filename + "." + type)));
+            string cacheKey = $"{type}:{secondPath}:{filename}";
+            string fullPath = Path.Combine(path, secondPath, filename + "." + type);
+            return configManagercache.GetOrAdd(cacheKey, _ => new ConfigManager(serializer, fullPath));
         }
 
         public IConfigSerializer CreateSerializer(ConfigType type)

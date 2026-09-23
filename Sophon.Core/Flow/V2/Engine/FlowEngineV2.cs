@@ -45,6 +45,7 @@ namespace Sophon.Core.Flow.V2
         private string? _currentBreakpointNodeId;
         private CancellationTokenSource? _runCts;
         private int _forkIdSeed;
+        private readonly IReadOnlyCollection<string> _flowCallStack;
 
         /// <summary>运动控制器。</summary>
         public IMotionController? MotionController { get; set; }
@@ -94,12 +95,14 @@ namespace Sophon.Core.Flow.V2
             IMotionController? motionController = null,
             IIoController? ioController = null,
             IEventBus? eventBus = null,
-            IServiceProvider? services = null)
+            IServiceProvider? services = null,
+            IReadOnlyCollection<string>? flowCallStack = null)
         {
             MotionController = motionController;
             IoController = ioController;
             EventBus = eventBus;
             Services = services;
+            _flowCallStack = flowCallStack ?? Array.Empty<string>();
         }
 
         #region 断点管理
@@ -355,14 +358,15 @@ namespace Sophon.Core.Flow.V2
                     throw new InvalidOperationException(errMsg);
                 }
 
-                var nodeCtx = new NodeExecutionContext(
+                    var nodeCtx = new NodeExecutionContext(
                     context,
                     node,
                     graph,
                     MotionController,
                     IoController,
                     EventBus,
-                    Services);
+                    Services,
+                    _flowCallStack);
 
                 // 5. 状态转换 -> Running
                 SetNodeState(node, FlowNodeState.Running);

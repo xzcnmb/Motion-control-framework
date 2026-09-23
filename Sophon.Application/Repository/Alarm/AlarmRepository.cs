@@ -93,7 +93,10 @@ namespace Sophon.Application
 
         public void Restore()
         {
-            RegisteredAlarms = new ObservableCollection<AlarmItem>(_alarmConfigManager.LoadConfig<List<AlarmItem>>());
+            // 文件不存在 / 空白 / JSON 内容为 null 时 LoadConfig 返回 null，
+            // 此时退化成空列表以保证注册表可编辑；反序列化等真实异常继续向上抛，保持失败可见
+            var loaded = _alarmConfigManager.LoadConfig<List<AlarmItem>>();
+            RegisteredAlarms = new ObservableCollection<AlarmItem>(loaded ?? new List<AlarmItem>());
         }
     }
 }

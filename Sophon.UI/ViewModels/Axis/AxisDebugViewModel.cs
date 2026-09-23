@@ -38,13 +38,26 @@ namespace Sophon.UI.ViewModels.Axis
             DisableAllCommand = new DelegateCommand(() => _axisManager.DisableAll());
             HomeAllCommand = new DelegateCommand(() => _axisManager.HomeAll());
             StopAllCommand = new DelegateCommand(() => _axisManager.StopAll());
-            AbortAllCommand = new DelegateCommand(() => _axisManager.AbortAll());
+            AbortAllCommand = new DelegateCommand(ExecuteAbortAll);
 
             InitializeAxes();
             SubscribeEvents();
         }
 
         private bool _isSubscribed;
+
+        private void ExecuteAbortAll()
+        {
+            var result = MessageBox.Show(
+                "确认执行全局急停？\n所有轴将立即停止并进入故障锁定，必须现场确认后逐轴复位。",
+                "确认全局急停",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result == MessageBoxResult.Yes)
+            {
+                _axisManager.AbortAll();
+            }
+        }
 
         private void InitializeAxes()
         {

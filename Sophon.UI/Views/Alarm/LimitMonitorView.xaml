@@ -41,11 +41,15 @@
                     Grid.Column="2"
                     Orientation="Horizontal"
                     VerticalAlignment="Center">
-                    <Button
-                        Margin="8,0"
-                        Command="{Binding ResetLimitCommand}"
-                        Content="瞬态协议复位（选中轴）"
-                        Style="{StaticResource ButtonDashedSuccess}" />
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                            <Button
+                                Margin="8,0"
+                                Command="{Binding ResetLimitCommand}"
+                                Content="复位选中轴限位"
+                                Style="{StaticResource ButtonDashedSuccess}" />
+                            <TextBlock Text="先确认已离开触发电平；只允许向反方向退离" FontSize="11" Foreground="#8C5A00" Margin="8,4,0,0" />
+                        </StackPanel>
+
                 </StackPanel>
             </Grid>
         </Border>
@@ -100,23 +104,7 @@
                             IsReadOnly="True" />
 
                         <!-- 限位状态指示 -->
-                        <DataGridTemplateColumn Width="110" Header="软限位状态">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Border
-                                        Margin="4,2"
-                                        Padding="6,2"
-                                        HorizontalAlignment="Center"
-                                        Background="{Binding SoftLimitTriggered, Converter={x:Null}}"
-                                        CornerRadius="4">
-                                        <TextBlock
-                                            FontWeight="Bold"
-                                            Foreground="{Binding SoftLimitTriggered, Converter={x:Null}}"
-                                            Text="{Binding SoftLimitTriggered, Converter={x:Null}}" />
-                                    </Border>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Width="110" Binding="{Binding SoftLimitTriggered}" Header="软限位状态" IsReadOnly="True" />
 
                         <DataGridTemplateColumn Width="110" Header="硬限位状态">
                             <DataGridTemplateColumn.CellTemplate>
@@ -130,7 +118,7 @@
                                         <TextBlock
                                             FontWeight="Bold"
                                             Foreground="White"
-                                            Text="{Binding HardLimitTriggered, Converter={x:Null}}" />
+                                            Text="{Binding HardLimitTriggered}" />
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

@@ -16,7 +16,7 @@ namespace Sophon.Infrastructure.Motion.Drivers
         /// <summary>
         /// 创建运动控制器实例。
         /// </summary>
-        /// <param name="kind">驱动类型（Simulated/GoogolGts/LeadShineDmc）</param>
+                /// <param name="kind">驱动类型（Simulated/GoogolGts/LeadShineDmc；总线卡与 ZMC 至今未实现）</param>
         /// <param name="axes">轴定义列表</param>
         /// <param name="timeSource">时间源（用于 Sim）</param>
         /// <param name="ioController">IO 控制器（用于 Sim）</param>
@@ -69,6 +69,15 @@ namespace Sophon.Infrastructure.Motion.Drivers
                         }
                         throw new InvalidOperationException($"创建雷赛 DMC 控制器失败，未允许降级到仿真 (NeverSilentlyFallbackToSim): {ex.Message}", ex);
                     }
+
+                // 总线卡 / ZMC 至今没有适配器。按品牌名猜一个脉冲 DLL 去打开比直接失败更危险，
+                // 总线主站也没有本机轴号可配，所以这里一律拒绝，绝不回退 Sim。
+                case DriverKind.GoogolGen:
+                case DriverKind.GoogolGe:
+                case DriverKind.LeadShineEtherCAT:
+                case DriverKind.ZmotionZmc:
+                case DriverKind.ZmotionEtherCAT:
+                    throw new NotSupportedException(MotionCardCatalog.NotImplementedMessage(kind));
 
                 default:
                     throw new NotSupportedException($"不支持的运动控制器驱动类型: {kind}");

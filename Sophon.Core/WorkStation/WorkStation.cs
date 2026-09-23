@@ -194,6 +194,8 @@ namespace Sophon.Core
 
                 while (!cts.IsCancellationRequested)
                 {
+                    // 每圈只保留显式 Persistent.* 数据，避免上一圈的视觉结果/分支变量污染下一圈。
+                    _flowContext.ClearTransientData();
                     _flowContext.Logger.Info(
                         $"工站{WorkStationName} 第 {CycleCount + 1} 次执行配方「{BoundFlowName}」");
                     await engine.RunAsync(_flowContext, cts.Token).ConfigureAwait(false);

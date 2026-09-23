@@ -1,6 +1,8 @@
 ﻿using Sophon.Common;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace Sophon.Infrastructure
@@ -35,6 +37,33 @@ namespace Sophon.Infrastructure
                 .First();
         }
 
+        public bool VerifyPassword(string name, string password, out bool migratedLegacyPassword)
+        {
+            migratedLegacyPassword = false;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(password)) return false;
+
+            var user = _dbContext.Db.Queryable<User>().First(u => u.UserName == name);
+            if (user == null || string.IsNullOrEmpty(user.Password)) return false;
+
+            if (user.Password.StartsWith("pbkdf2$", StringComparison.Ordinal))
+            {
+                return PasswordHasher.Verify(password, user.Password);
+            }
+
+            // 兼容旧数据库：仅在一次成功登录后立即升级为哈希。
+            if (!CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(user.Password),
+                    System.Text.Encoding.UTF8.GetBytes(password)))
+            {
+                return false;
+            }
+
+            user.Password = PasswordHasher.Hash(password);
+            _dbContext.Db.Updateable(user).ExecuteCommand();
+            migratedLegacyPassword = true;
+            return true;
+        }
+
         public UserLevel GetLevelByUserName(string name)
         {
             if (string.IsNullOrWhiteSpace(name) || name == "未登录")
@@ -50,8 +79,10 @@ namespace Sophon.Infrastructure
 
         public bool ChangePassword(string name, string newPassword)
         {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(newPassword)) return false;
+            string encoded = PasswordHasher.Hash(newPassword);
             return _dbContext.Db.Updateable<User>()
-                                .SetColumns(u => u.Password == newPassword)
+                                .SetColumns(u => u.Password == encoded)
                                 .Where(u => u.UserName == name)
                                 .ExecuteCommand() > 0;
         }

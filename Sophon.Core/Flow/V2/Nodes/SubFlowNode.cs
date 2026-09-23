@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,6 +29,25 @@ namespace Sophon.Core.Flow.V2
                 return NodeExecutionResult.Failed("子流程节点未配置 subFlowName 参数");
             }
 
+            if (ctx.FlowCallStack.Count >= 32)
+            {
+                return NodeExecutionResult.Failed($"子流程调用深度超过 32，拒绝调用「{subFlowName}」");
+            }
+
+            var activeStack = new List<string>(ctx.FlowCallStack);
+            if (!activeStack.Any(name => string.Equals(name, ctx.Graph.FlowName, StringComparison.OrdinalIgnoreCase)))
+            {
+                activeStack.Add(ctx.Graph.FlowName);
+            }
+
+            foreach (var activeName in activeStack)
+            {
+                if (string.Equals(activeName, subFlowName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return NodeExecutionResult.Failed($"检测到子流程递归调用链：{string.Join(" -> ", activeStack)} -> {subFlowName}");
+                }
+            }
+
             ctx.LogInfo($"调用子流程: '{subFlowName}'");
 
             FlowGraph? subGraph = FlowGraphStore.Load(subFlowName);
@@ -40,7 +60,8 @@ namespace Sophon.Core.Flow.V2
                 ctx.MotionController,
                 ctx.IoController,
                 ctx.EventBus,
-                ctx.Services);
+                ctx.Services,
+                activeStack);
 
             try
             {

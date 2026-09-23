@@ -273,7 +273,7 @@ namespace Sophon.Infrastructure.Motion.Drivers
                     smoothTime = 20
                 };
                 GoogolGtsNative.GT_SetTrapPrm(ax, ref prm);
-                GoogolGtsNative.GT_SetVel(ax, Math.Abs(pulseVel));
+                GoogolGtsNative.GT_SetVel(ax, pulseVel);
                 GoogolGtsNative.GT_Update(1 << axisId);
 
                 _activeRequests[axisId] = req;
@@ -523,7 +523,11 @@ namespace Sophon.Infrastructure.Motion.Drivers
             {
                 try
                 {
-                    GoogolGtsNative.GT_ClrSts((short)axisId, 1);
+                    short result = GoogolGtsNative.GT_ClrSts((short)(axisId + 1), 1);
+                    if (result != 0)
+                    {
+                        throw new InvalidOperationException($"GTS 轴 {axisId} 状态复位失败，错误码 {result}");
+                    }
                 }
                 catch (DllNotFoundException) { }
             }

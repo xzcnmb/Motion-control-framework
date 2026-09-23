@@ -29,14 +29,26 @@ namespace Sophon.Infrastructure.Config
                 return errors;
             }
 
+            // 0. 选型目录一致性：型号必须在目录内，且未接入的总线/正运动驱动直接拒绝
+            ValidateAgainstCatalog(p, errors);
+
             // 1. 轴数量有效性 (0..64)
             if (p.Axes == null)
             {
                 errors.Add("轴定义列表未初始化。");
             }
-            else if (p.Axes.Count < 0 || p.Axes.Count > 64)
+            else
             {
-                errors.Add($"轴数量超出有效范围(0~64): 当前轴数为 {p.Axes.Count}。");
+                if (p.Axes.Count < 0 || p.Axes.Count > 64)
+                {
+                    errors.Add($"轴数量超出有效范围(0~64): 当前轴数为 {p.Axes.Count}。");
+                }
+
+                var model = MotionCardCatalog.Resolve(p);
+                if (model != null && p.Axes.Count > model.MaxAxes)
+                {
+                    errors.Add($"轴数量({p.Axes.Count})超出型号 {model.Model}({model.DisplayName}) 最多 {model.MaxAxes} 轴的上限，请减少轴数或更换型号。");
+                }
             }
 
             // 2. 轴 ID 唯一性与各轴参数检查
@@ -172,6 +184,56 @@ namespace Sophon.Infrastructure.Config
             }
 
             return errors;
+        }
+
+        /// <summary>
+        /// 选型目录一致性：型号必须在目录内、Driver 必须与型号匹配；
+        /// 未接入的总线 / 正运动驱动一律拒绝，绝不静默回退到脉冲 DLL 或仿真。
+        /// 旧档案只写了 Driver + CardModel 时按驱动种类反推；非仿真驱动没有型号、或型号非空却不在目录时，
+        /// 一律要求按目录重新选择，禁止按 Driver 静默套第一个型号。
+        /// </summary>
+        private static void ValidateAgainstCatalog(MotionCardProfile p, List<string> errors)
+        {
+            if (p == null)
+            {
+                return;
+            }
+
+            // 纯仿真档案：不写型号，直接放行。
+            if (p.Driver == DriverKind.Simulated && string.IsNullOrWhiteSpace(p.CardModel))
+            {
+                return;
+            }
+
+            var byModel = MotionCardCatalog.Find(p.CardModel);
+            if (byModel == null)
+            {
+                if (!string.IsNullOrWhiteSpace(p.CardModel))
+                {
+                    errors.Add($"控制卡型号 {p.CardModel} 不在选型目录中，请按「厂商 → 脉冲/总线接口 → 系列 → 型号」重新选择。");
+                    return;
+                }
+
+                // 非仿真驱动却没有型号：必须按目录重新选择，禁止按 Driver 猜一个型号，更不许静默回退 Sim。
+                errors.Add($"未选择控制卡型号：请按「厂商 → 脉冲/总线接口 → 系列 → 型号」选择型号（当前驱动：{MotionCardCatalog.Display(p.Driver)}）。");
+
+                if (!MotionCardCatalog.IsImplemented(p.Driver))
+                {
+                    errors.Add(MotionCardCatalog.NotImplementedMessage(p.Driver));
+                }
+
+                return;
+            }
+
+            if (p.Driver != byModel.Driver)
+            {
+                errors.Add($"驱动与型号不匹配：型号 {byModel.Model} 对应 {MotionCardCatalog.Display(byModel.Driver)}，当前档案选择的是 {MotionCardCatalog.Display(p.Driver)}。");
+            }
+
+            if (!MotionCardCatalog.IsImplemented(byModel.Driver))
+            {
+                errors.Add(MotionCardCatalog.NotImplementedMessage(byModel.Driver, byModel.Model));
+            }
         }
     }
 }

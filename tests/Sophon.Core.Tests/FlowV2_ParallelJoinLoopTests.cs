@@ -20,6 +20,9 @@ namespace Sophon.Core.Tests
     /// 3. Jump / SubFlow 跳转执行（Id/名称解析、上下文保持、目标缺失明确失败、长跳转链不涨栈）；
     /// 4. AxisMove / MultiAxisInterp 完成状态与 PLCopen CommandCompletionStatus 精确映射。
     /// </summary>
+    // 与 FlowV2_ControlFlowTests、FlowV2_HardwareNodeTests 共用同一 Collection：
+    // 这些类都会改写进程级全局 FlowGraphStore.DefaultBaseDirectory，串行执行避免互相翻转全局目录。
+    [Collection("FlowGraphStore")]
     public class FlowV2_ParallelJoinLoopTests
     {
         #region 测试基建
@@ -810,9 +813,13 @@ namespace Sophon.Core.Tests
         [Fact]
         public async Task SubFlowNode_调用子流程_共享上下文数据()
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "SophonJoinLoopSubFlow_" + Guid.NewGuid().ToString("N"));
+            // 每测试独占临时目录，且从保存前到断言后全程持有 DefaultBaseDirectory，
+            // 不写共享默认目录、不跨目录清理，与其他测试类零争用
+            var tempDir = Path.Combine(Path.GetTempPath(), "sophon_flowtest_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
 
+            var origDir = FlowGraphStore.DefaultBaseDirectory;
+            FlowGraphStore.DefaultBaseDirectory = tempDir;
             try
             {
                 var subStart = Start("子图起始");
@@ -824,8 +831,7 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(subStart.Id, "Out", subSet.Id, "In") }
                 };
 
-                FlowGraphStore.Save(subGraph, tempDir);
-                FlowGraphStore.Save(subGraph); // 默认目录同步一份，测试结束清理
+                FlowGraphStore.Save(subGraph);
 
                 var mainStart = Start("主图起始");
                 var subNode = new FlowNode("SubFlow", "调用子流程")
@@ -841,25 +847,15 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(mainStart.Id, "Out", subNode.Id, "In") }
                 };
 
-                var origDir = FlowGraphStore.DefaultBaseDirectory;
-                FlowGraphStore.DefaultBaseDirectory = tempDir;
-                try
-                {
-                    var engine = new FlowEngineV2();
-                    var ctx = new FlowContext("MainFlow", new FakeLoggerFactory());
-                    await engine.RunAsync(mainGraph, ctx);
+                var engine = new FlowEngineV2();
+                var ctx = new FlowContext("MainFlow", new FakeLoggerFactory());
+                await engine.RunAsync(mainGraph, ctx);
 
-                    Assert.True(ctx.GetData<bool>("SubFlowExecuted"));
-                }
-                finally
-                {
-                    FlowGraphStore.DefaultBaseDirectory = origDir;
-                }
+                Assert.True(ctx.GetData<bool>("SubFlowExecuted"));
             }
             finally
             {
-                var defaultFile = FlowGraphStore.GetFilePath("ChildFlow");
-                if (File.Exists(defaultFile)) { try { File.Delete(defaultFile); } catch { } }
+                FlowGraphStore.DefaultBaseDirectory = origDir;
                 if (Directory.Exists(tempDir))
                 {
                     try { Directory.Delete(tempDir, true); } catch { }
@@ -870,9 +866,13 @@ namespace Sophon.Core.Tests
         [Fact]
         public async Task SubFlowNode_子流程失败_向上传播明确错误()
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "SophonJoinLoopSubFail_" + Guid.NewGuid().ToString("N"));
+            // 每测试独占临时目录，且从保存前到断言后全程持有 DefaultBaseDirectory，
+            // 不写共享默认目录、不跨目录清理，与其他测试类零争用
+            var tempDir = Path.Combine(Path.GetTempPath(), "sophon_flowtest_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
 
+            var origDir = FlowGraphStore.DefaultBaseDirectory;
+            FlowGraphStore.DefaultBaseDirectory = tempDir;
             try
             {
                 var subStart = Start("子图起始");
@@ -889,7 +889,6 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(subStart.Id, "Out", subFail.Id, "In") }
                 };
 
-                FlowGraphStore.Save(subGraph, tempDir);
                 FlowGraphStore.Save(subGraph);
 
                 var mainStart = Start("主图起始");
@@ -906,25 +905,15 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(mainStart.Id, "Out", subNode.Id, "In") }
                 };
 
-                var origDir = FlowGraphStore.DefaultBaseDirectory;
-                FlowGraphStore.DefaultBaseDirectory = tempDir;
-                try
-                {
-                    var engine = new FlowEngineV2();
-                    var ex = await Assert.ThrowsAsync<StepExecuteException>(
-                        () => engine.RunAsync(mainGraph, new FlowContext("MainFailFlow", new FakeLoggerFactory())));
+                var engine = new FlowEngineV2();
+                var ex = await Assert.ThrowsAsync<StepExecuteException>(
+                    () => engine.RunAsync(mainGraph, new FlowContext("MainFailFlow", new FakeLoggerFactory())));
 
-                    Assert.Contains("子图失败点", ex.Message);
-                }
-                finally
-                {
-                    FlowGraphStore.DefaultBaseDirectory = origDir;
-                }
+                Assert.Contains("子图失败点", ex.Message);
             }
             finally
             {
-                var defaultFile = FlowGraphStore.GetFilePath("FailChildFlow");
-                if (File.Exists(defaultFile)) { try { File.Delete(defaultFile); } catch { } }
+                FlowGraphStore.DefaultBaseDirectory = origDir;
                 if (Directory.Exists(tempDir))
                 {
                     try { Directory.Delete(tempDir, true); } catch { }

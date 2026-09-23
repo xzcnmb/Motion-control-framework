@@ -8,6 +8,10 @@ using Xunit;
 
 namespace Sophon.Core.Tests
 {
+    // 本类与 FlowV2_ParallelJoinLoopTests、FlowV2_HardwareNodeTests 都会改写进程级全局
+    // FlowGraphStore.DefaultBaseDirectory，xUnit 默认按类并行，故纳入同一 Collection 串行执行，
+    // 杜绝全局目录在别类测试窗口内被翻转导致读错目录。
+    [Collection("FlowGraphStore")]
     public class FlowV2_ControlFlowTests
     {
         [Fact]
@@ -243,12 +247,16 @@ namespace Sophon.Core.Tests
         [Fact]
         public async Task SubFlowNode_调用并执行子流程()
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "SophonSubFlowTest_" + Guid.NewGuid().ToString("N"));
+            // 每测试独占临时目录，且从保存前到断言后全程持有 DefaultBaseDirectory：
+            // 不写共享默认目录、不跨目录清理，从根上消除与其他测试类的同名/同目录争用
+            var tempDir = Path.Combine(Path.GetTempPath(), "sophon_flowtest_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
 
+            var origDir = FlowGraphStore.DefaultBaseDirectory;
+            FlowGraphStore.DefaultBaseDirectory = tempDir;
             try
             {
-                // 创建并保存子流程
+                // 创建并保存子流程（落在本测试独占目录）
                 var subStart = new FlowNode("Start", "子图起始") { Ports = new List<FlowPort> { new("Out", FlowPortDirection.Out, "Out") } };
                 var subSet = new FlowNode("Variable", "子图设变量")
                 {
@@ -267,8 +275,6 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(subStart.Id, "Out", subSet.Id, "In") }
                 };
 
-                FlowGraphStore.Save(subGraph, tempDir);
-                // 并发测试安全：同时在默认目录保存一份，测试结束清理，防止多测试类并发改写 DefaultBaseDirectory 造成争用
                 FlowGraphStore.Save(subGraph);
 
                 // 创建主流程
@@ -288,26 +294,15 @@ namespace Sophon.Core.Tests
                     Connections = new List<FlowConnection> { new(mainStart.Id, "Out", subNode.Id, "In") }
                 };
 
-                // 设置默认目录以供加载
-                var origDir = FlowGraphStore.DefaultBaseDirectory;
-                FlowGraphStore.DefaultBaseDirectory = tempDir;
-                try
-                {
-                    var engine = new FlowEngineV2();
-                    var ctx = new FlowContext("MainFlow", new FakeLoggerFactory());
-                    await engine.RunAsync(mainGraph, ctx);
+                var engine = new FlowEngineV2();
+                var ctx = new FlowContext("MainFlow", new FakeLoggerFactory());
+                await engine.RunAsync(mainGraph, ctx);
 
-                    Assert.True(ctx.GetData<bool>("SubFlowExecuted"));
-                }
-                finally
-                {
-                    FlowGraphStore.DefaultBaseDirectory = origDir;
-                }
+                Assert.True(ctx.GetData<bool>("SubFlowExecuted"));
             }
             finally
             {
-                var defaultFile = FlowGraphStore.GetFilePath("ChildFlow");
-                if (File.Exists(defaultFile)) { try { File.Delete(defaultFile); } catch { } }
+                FlowGraphStore.DefaultBaseDirectory = origDir;
 
                 if (Directory.Exists(tempDir))
                 {

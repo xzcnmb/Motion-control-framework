@@ -24,7 +24,28 @@ namespace Sophon.Infrastructure.Motion.Sim
             Move,
             Jog,
             Homing,
-            Streaming
+            Streaming,
+            /// <summary>Cat1 受控停车中（有速度衰减过程后清除）</summary>
+            Stopping,
+            /// <summary>急停/Abort 故障锁定位：禁止一切运动，直至 ResetAxis</summary>
+            ErrorStop
+        }
+
+        /// <summary>
+        /// 回零阶段状态机（有阶段/事件驱动，禁止只靠固定距离成功；每个阶段推进都有超时/行程兜底，不允许永久挂起）。
+        /// </summary>
+        private enum HomeStage
+        {
+            /// <summary>朝回零方向搜索原点信号</summary>
+            Search,
+            /// <summary>已检测到原点信号</summary>
+            Detected,
+            /// <summary>反向退离原点</summary>
+            Escaping,
+            /// <summary>退离后停稳确认</summary>
+            Settling,
+            /// <summary>当前位置置零</summary>
+            Zeroing
         }
 
         private class SimAxisState
@@ -44,18 +65,23 @@ namespace Sophon.Infrastructure.Motion.Sim
             public double Decel { get; set; }
             public int JogDir { get; set; }
 
-            // 回零专用状态
-            public int HomingStage { get; set; } // 0: 寻零走位, 1: 碰原点, 2: 反向离开, 3: 完成
+            // 回零专用状态（有阶段/事件驱动状态机，禁止只靠固定距离成功、必须有超时）
+            public HomeStage HomingStage { get; set; } = HomeStage.Search;
             public HomingMode HomeMode { get; set; }
             public HomeDirection HomeDir { get; set; }
             public double HomeSpeed { get; set; }
             public double HomeStartPosition { get; set; }
+            public double HomeDetectedPosition { get; set; } // 触发原点瞬间的位置（反向退离参考点）
+            public long HomeStartElapsedMs { get; set; }     // 回零起始时刻（来自 ITimeSource，用于超时判定）
+            public double HomeSearchExtent { get; set; }     // 搜索行程上限（行进幅度参考，超行程即判未回零）
+            public double HomeEscapeExtent { get; set; }     // 退离行程
 
             // 故障状态
             public bool PositiveHardLimitFault { get; set; }
             public bool NegativeHardLimitFault { get; set; }
             public bool DriveAlarmFault { get; set; }
             public bool FollowingErrorFault { get; set; }
+            public bool ErrorStop { get; set; }
         }
 
         private readonly List<AxisDefinition> _axes;
@@ -79,12 +105,11 @@ namespace Sophon.Infrastructure.Motion.Sim
         /// <summary>
         /// 统一完成回报：先同步完成对应 TCS（若为异步 API 请求），再异步派发 AxisDone 事件（UI 等订阅者）。
         /// 严格遵循 PLCopen 语义互斥区分 Done(到位成功)、CommandAborted(被中途叫停/抢占)、Error(故障/越界)。
+        /// <para>必须在<b>锁外</b>调用，避免持锁派发事件/唤醒等待方。</para>
         /// </summary>
-        private void ReportDone(Guid requestId, bool success, string reason, CommandCompletionStatus? status = null, int axisId = 0)
+        private void ReportDone(AxisDoneArgs args)
         {
-            var st = status ?? (success ? CommandCompletionStatus.Done : CommandCompletionStatus.Error);
-            var args = new AxisDoneArgs(requestId, success, reason, st, axisId);
-            if (_pending.TryRemove(requestId, out var tcs))
+            if (_pending.TryRemove(args.RequestId, out var tcs))
             {
                 tcs.TrySetResult(args);
             }
@@ -93,6 +118,12 @@ namespace Sophon.Infrastructure.Motion.Sim
                 try { AxisDone?.Invoke(args); }
                 catch { /* 忽略订阅者内部异常 */ }
             });
+        }
+
+        private void ReportDone(Guid requestId, bool success, string reason, CommandCompletionStatus? status = null, int axisId = 0)
+        {
+            var st = status ?? (success ? CommandCompletionStatus.Done : CommandCompletionStatus.Error);
+            ReportDone(new AxisDoneArgs(requestId, success, reason, st, axisId));
         }
 
         /// <summary>
@@ -108,12 +139,85 @@ namespace Sophon.Infrastructure.Motion.Sim
             catch { /* 忽略订阅者内部异常 */ }
         }
 
+        /// <summary>轴是否处于故障/急停锁定（ErrorStop 或任一故障位）。调用方需持锁。</summary>
+        private static bool IsAxisFaulted(SimAxisState s)
+            => s.ErrorStop || s.PositiveHardLimitFault || s.NegativeHardLimitFault || s.DriveAlarmFault || s.FollowingErrorFault;
+
+        /// <summary>清除单轴的运动/速度/流式关联状态（不动 Enabled/Homed/故障位）。调用方需持锁。</summary>
+        private static void ClearAxisMotion_Locked(SimAxisState state)
+        {
+            state.ActualVelocity = 0;
+            state.MotionType = AxisMotionType.None;
+            state.CurrentRequestId = Guid.Empty;
+            state.TargetSpeed = 0;
+            state.JogDir = 0;
+        }
+
+        /// <summary>清除流式插补状态。调用方需持锁。</summary>
+        private void ClearStreaming_Locked()
+        {
+            _streamActive = false;
+            _streamRequestId = Guid.Empty;
+            while (_streamQueue.TryDequeue(out _)) { }
+        }
+
+        /// <summary>回零搜索行程上限：优先用两软限位跨度；否则用一个保守常量。仅用于"走到头仍碰不到原点"的超时熔断，不影响真实到位判定。</summary>
+        private static double GetHomeSearchExtent(AxisDefinition def)
+        {
+            double raw = (def.SoftLimitMax - def.SoftLimitMin) + 100.0;
+            if (double.IsNaN(raw) || double.IsInfinity(raw) || raw <= 0) raw = 1000.0;
+            return raw;
+        }
+
+        /// <summary>
+        /// 异步运动/回零命令被外部取消：以 <see cref="CommandCompletionStatus.CommandAborted"/> 完结本请求（PLCopen 软取消），
+        /// 若该轴正在执行本请求则平滑停下（Halt），不留悬挂 TCS，不升级为 ErrorStop。
+        /// </summary>
+        private void OnMotionCommandCanceled(Guid requestId, int axisId)
+        {
+            bool runningThis;
+            lock (_lock)
+            {
+                runningThis = _axisStates.TryGetValue(axisId, out var s)
+                    && s.MotionType != AxisMotionType.None
+                    && s.CurrentRequestId == requestId;
+            }
+
+            if (runningThis)
+            {
+                // Halt 会以 CommandAborted 完结该请求（并移出 _pending）
+                Halt(axisId);
+            }
+
+            // 兜底：请求尚未启动或已提前完结时，确保 TCS 被完成，避免悬挂
+            CompletePendingAsAborted(requestId, axisId, "命令被取消 (CommandAborted)");
+        }
+
+        /// <summary>把仍处于 _pending 的请求以 CommandAborted 完结并派发 AxisDone（无锁）。</summary>
+        private void CompletePendingAsAborted(Guid requestId, int axisId, string reason)
+        {
+            if (_pending.TryRemove(requestId, out var tcs))
+            {
+                var args = new AxisDoneArgs(requestId, false, reason, CommandCompletionStatus.CommandAborted, axisId);
+                tcs.TrySetResult(args);
+                _ = Task.Run(() => { try { AxisDone?.Invoke(args); } catch { } });
+            }
+        }
+
         // 流式位置环形/并发缓冲
         private Guid _streamRequestId = Guid.Empty;
         private int _streamAxisCount;
         private double _streamCycleMs = 1.0;
         private readonly ConcurrentQueue<double[]> _streamQueue = new();
         private volatile bool _streamActive;
+        private long _lastElapsedMs;
+
+        // 回零状态机专用常量
+        private const double HomeTotalTimeoutMs = 5000;   // 任何回零阶段的总超时（ms）：禁止永久挂起
+        private const double HomeEscapeSpeedRatio = 0.5;  // 检测到原点后反向退离速度占回零速度比例
+        private const double HomeSettleFactor = 0.5;      // 停稳阶段速度衰减系数
+        private const double HomeSettleVThreshold = 0.01; // 停稳确认的速度阈值
+        private const double HomeDefaultEscapeMm = 1.0;  // 检测到原点后反向退离距离（Contracts 无此配置项，此处给唯一默认）
 
         public DriverKind Kind => DriverKind.Simulated;
 
@@ -281,6 +385,7 @@ namespace Sophon.Infrastructure.Motion.Sim
                     }
                     state.ActualVelocity = 0;
                     state.MotionType = AxisMotionType.None;
+                    state.CurrentRequestId = Guid.Empty;
                 }
             }
 
@@ -306,14 +411,22 @@ namespace Sophon.Infrastructure.Motion.Sim
 
         public void DisableAxis(int axisId)
         {
+            Guid requestId = Guid.Empty;
             lock (_lock)
             {
                 if (_axisStates.TryGetValue(axisId, out var state))
                 {
+                    requestId = state.CurrentRequestId;
                     state.Enabled = false;
                     state.ActualVelocity = 0;
                     state.MotionType = AxisMotionType.None;
+                    state.CurrentRequestId = Guid.Empty;
                 }
+            }
+
+            if (requestId != Guid.Empty)
+            {
+                ReportDone(requestId, false, "轴下使能，中止当前命令", CommandCompletionStatus.CommandAborted, axisId);
             }
         }
 
@@ -360,19 +473,33 @@ namespace Sophon.Infrastructure.Motion.Sim
                 return requestId;
             }
 
+            var fail = TryBeginJog(requestId, axisId, dir, speed);
+            if (fail != null)
+            {
+                ReportDone(fail);
+            }
+            return requestId;
+        }
+
+        /// <summary>在锁内尝试登记点动命令；返回 null 表示成功启动，否则返回快速失败回报（调用方在锁外派发）。</summary>
+        private AxisDoneArgs? TryBeginJog(Guid requestId, int axisId, int dir, double speed)
+        {
             lock (_lock)
             {
                 if (!_axisStates.TryGetValue(axisId, out var state))
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 不存在");
-                    return requestId;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 不存在", CommandCompletionStatus.Error, axisId);
 
                 if (!state.Enabled)
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 未使能");
-                    return requestId;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 未使能", CommandCompletionStatus.Error, axisId);
+
+                if (IsAxisFaulted(state))
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 处于故障锁定状态，请先复位", CommandCompletionStatus.Error, axisId);
+
+                if (double.IsNaN(speed) || double.IsInfinity(speed) || speed <= 0)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 点动速度无效", CommandCompletionStatus.Error, axisId);
+
+                if (state.MotionType != AxisMotionType.None)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 已有运动命令在执行", CommandCompletionStatus.CommandAborted, axisId);
 
                 var def = state.Definition;
                 double clampedSpeed = Math.Min(Math.Abs(speed), def.MaxSpeed);
@@ -384,9 +511,8 @@ namespace Sophon.Infrastructure.Motion.Sim
                 state.TargetSpeed = clampedSpeed;
                 state.Accel = def.MaxAccel > 0 ? def.MaxAccel : 1000;
                 state.Decel = def.MaxDecel > 0 ? def.MaxDecel : 1000;
+                return null;
             }
-
-            return requestId;
         }
 
         public Guid MoveAbs(int axisId, double target, double speed, double accel, double decel, double jerk = 0)
@@ -403,17 +529,19 @@ namespace Sophon.Infrastructure.Motion.Sim
             _pending[requestId] = tcs;
             if (ct.CanBeCanceled)
             {
-                var reg = ct.Register(() =>
-                {
-                    if (_pending.TryRemove(requestId, out var pending))
-                    {
-                        pending.TrySetCanceled(ct);
-                    }
-                    Abort(axisId);
-                });
+                var reg = ct.Register(() => OnMotionCommandCanceled(requestId, axisId));
                 tcs.Task.ContinueWith(_ => reg.Dispose(), TaskContinuationOptions.ExecuteSynchronously);
             }
-            MoveAbsCore(requestId, axisId, target, speed, accel, decel, jerk);
+
+            if (ct.IsCancellationRequested)
+            {
+                // 令牌在启动前已取消：不启动运动，直接以 CommandAborted 完结，避免悬挂
+                CompletePendingAsAborted(requestId, axisId, "运动命令在启动前已被取消");
+            }
+            else
+            {
+                MoveAbsCore(requestId, axisId, target, speed, accel, decel, jerk);
+            }
             return tcs.Task;
         }
 
@@ -425,19 +553,38 @@ namespace Sophon.Infrastructure.Motion.Sim
                 return;
             }
 
+            var result = TryBeginMove(requestId, axisId, target, speed, accel, decel, out var limitEvt);
+            if (limitEvt != null)
+            {
+                // 软限位事件在锁外派发
+                _ = Task.Run(() => LimitTriggered?.Invoke(limitEvt));
+            }
+            if (result != null)
+            {
+                ReportDone(result);
+            }
+        }
+
+        /// <summary>在锁内尝试登记绝对定位命令；返回 null 表示成功启动，否则返回快速失败回报（调用方在锁外派发）。</summary>
+        private AxisDoneArgs? TryBeginMove(Guid requestId, int axisId, double target, double speed, double accel, double decel, out LimitTriggeredArgs? limitEvt)
+        {
+            limitEvt = null;
             lock (_lock)
             {
                 if (!_axisStates.TryGetValue(axisId, out var state))
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 不存在");
-                    return;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 不存在", CommandCompletionStatus.Error, axisId);
 
                 if (!state.Enabled)
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 未使能");
-                    return;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 未使能", CommandCompletionStatus.Error, axisId);
+
+                if (IsAxisFaulted(state))
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 处于故障锁定状态，请先复位", CommandCompletionStatus.Error, axisId);
+
+                if (state.MotionType != AxisMotionType.None)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 已有运动命令在执行", CommandCompletionStatus.CommandAborted, axisId);
+
+                if (double.IsNaN(target) || double.IsInfinity(target) || double.IsNaN(speed) || double.IsInfinity(speed) || speed <= 0)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 的目标或速度无效", CommandCompletionStatus.Error, axisId);
 
                 var def = state.Definition;
 
@@ -446,15 +593,13 @@ namespace Sophon.Infrastructure.Motion.Sim
                 {
                     if (target > def.SoftLimitMax)
                     {
-                        _ = Task.Run(() => LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, "SoftLimitMax", true, false)));
-                        ReportDone(requestId, false, "目标超出正向软限位");
-                        return;
+                        limitEvt = new LimitTriggeredArgs(axisId, "SoftLimitMax", true, false);
+                        return new AxisDoneArgs(requestId, false, "目标超出正向软限位", CommandCompletionStatus.Error, axisId);
                     }
                     if (target < def.SoftLimitMin)
                     {
-                        _ = Task.Run(() => LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, "SoftLimitMin", false, false)));
-                        ReportDone(requestId, false, "目标超出负向软限位");
-                        return;
+                        limitEvt = new LimitTriggeredArgs(axisId, "SoftLimitMin", false, false);
+                        return new AxisDoneArgs(requestId, false, "目标超出负向软限位", CommandCompletionStatus.Error, axisId);
                     }
                 }
 
@@ -469,6 +614,7 @@ namespace Sophon.Infrastructure.Motion.Sim
                 state.TargetSpeed = clampedSpeed;
                 state.Accel = safeAccel > 0 ? safeAccel : 1000;
                 state.Decel = safeDecel > 0 ? safeDecel : 1000;
+                return null;
             }
         }
 
@@ -502,20 +648,25 @@ namespace Sophon.Infrastructure.Motion.Sim
             _pending[requestId] = tcs;
             if (ct.CanBeCanceled)
             {
-                var reg = ct.Register(() =>
-                {
-                    if (_pending.TryRemove(requestId, out var pending))
-                    {
-                        pending.TrySetCanceled(ct);
-                    }
-                    Abort(axisId);
-                });
+                var reg = ct.Register(() => OnMotionCommandCanceled(requestId, axisId));
                 tcs.Task.ContinueWith(_ => reg.Dispose(), TaskContinuationOptions.ExecuteSynchronously);
             }
-            HomeCore(requestId, axisId, mode, dir, speed);
+
+            if (ct.IsCancellationRequested)
+            {
+                CompletePendingAsAborted(requestId, axisId, "回零命令在启动前已被取消");
+            }
+            else
+            {
+                HomeCore(requestId, axisId, mode, dir, speed);
+            }
             return tcs.Task;
         }
 
+        /// <summary>
+        /// 回零状态机（Search → Detected → Escaping → Settling → Zeroing → 完成）。所有推进由仿真循环按事件/阶段驱动，
+        /// 每个阶段有超时与行程兜底，禁止只靠固定距离成功、也禁止永久挂起。初始校验失败在锁外回报。
+        /// </summary>
         private void HomeCore(Guid requestId, int axisId, HomingMode mode, HomeDirection dir, double speed)
         {
             if (State != ConnectionState.Ready)
@@ -524,22 +675,39 @@ namespace Sophon.Infrastructure.Motion.Sim
                 return;
             }
 
+            var fail = TryBeginHome(requestId, axisId, mode, dir, speed);
+            if (fail != null)
+            {
+                ReportDone(fail);
+            }
+        }
+
+        private AxisDoneArgs? TryBeginHome(Guid requestId, int axisId, HomingMode mode, HomeDirection dir, double speed)
+        {
             lock (_lock)
             {
                 if (!_axisStates.TryGetValue(axisId, out var state))
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 不存在");
-                    return;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 不存在", CommandCompletionStatus.Error, axisId);
 
                 if (!state.Enabled)
-                {
-                    ReportDone(requestId, false, $"轴 {axisId} 未使能");
-                    return;
-                }
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 未使能", CommandCompletionStatus.Error, axisId);
+
+                if (IsAxisFaulted(state))
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 处于故障锁定状态，请先复位", CommandCompletionStatus.Error, axisId);
+
+                if (double.IsNaN(speed) || double.IsInfinity(speed) || speed <= 0)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 回零速度无效", CommandCompletionStatus.Error, axisId);
+
+                if (state.MotionType != AxisMotionType.None)
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 已有运动命令在执行", CommandCompletionStatus.CommandAborted, axisId);
+
+                // 需要搜索原点信号的模式必须有回零输入点；CurrentPosition 模式不使用外部传感器，故不强制
+                bool needsOriginSignal = state.Definition.HomeMode != HomingMode.CurrentPosition && mode != HomingMode.CurrentPosition;
+                if (needsOriginSignal && string.IsNullOrWhiteSpace(state.Definition.HomeIoName))
+                    return new AxisDoneArgs(requestId, false, $"轴 {axisId} 未配置回零输入点 (HomeIoName)", CommandCompletionStatus.Error, axisId);
 
                 var def = state.Definition;
-                double safeSpeed = speed > 0 ? Math.Min(speed, def.HomeSpeed) : def.HomeSpeed;
+                double safeSpeed = speed > 0 ? Math.Min(speed, def.HomeSpeed > 0 ? def.HomeSpeed : speed) : (def.HomeSpeed > 0 ? def.HomeSpeed : 10);
                 if (safeSpeed <= 0) safeSpeed = 10;
 
                 state.MotionType = AxisMotionType.Homing;
@@ -547,10 +715,21 @@ namespace Sophon.Infrastructure.Motion.Sim
                 state.HomeMode = mode;
                 state.HomeDir = dir;
                 state.HomeSpeed = safeSpeed;
-                state.HomingStage = 0;
+                state.HomingStage = HomeStage.Search;
                 state.HomeStartPosition = state.ActualPosition;
+                state.HomeDetectedPosition = state.ActualPosition;
+                state.HomeStartElapsedMs = _lastElapsedMs;
+                state.HomeSearchExtent = GetHomeSearchExtent(def);
+                state.HomeEscapeExtent = HomeDefaultEscapeMm;
                 state.Accel = def.MaxAccel > 0 ? def.MaxAccel : 1000;
                 state.Decel = def.MaxDecel > 0 ? def.MaxDecel : 1000;
+
+                int dirSign = (dir == HomeDirection.Positive) ? 1 : -1;
+                // 搜索目标位置仅用于可观测性；真实推进与熔断只看 HomeSearchExtent 行程（回零允许越过软限位搜索）
+                state.JogDir = dirSign;
+                state.TargetPosition = state.HomeStartPosition + dirSign * state.HomeSearchExtent;
+                state.TargetSpeed = state.HomeSpeed;
+                return null;
             }
         }
 
@@ -558,107 +737,144 @@ namespace Sophon.Infrastructure.Motion.Sim
 
         /// <summary>
         /// Level 1: 软件工艺暂停/平滑停止 (MC_Halt, Stop Cat 2)。
+        /// 立即停稳并把运动状态清空为 <see cref="AxisMotionType.None"/>(Standstill，可立即重新运动)；
+        /// 以 <see cref="CommandCompletionStatus.CommandAborted"/> 完结当前请求（软取消，不锁定、不进入 ErrorStop）。
         /// </summary>
         public void Halt(int axisId)
         {
+            AxisDoneArgs? done = null;
             lock (_lock)
             {
-                if (_axisStates.TryGetValue(axisId, out var state))
+                if (_axisStates.TryGetValue(axisId, out var state) && state.MotionType != AxisMotionType.None)
                 {
-                    if (state.MotionType != AxisMotionType.None)
-                    {
-                        var reqId = state.CurrentRequestId;
-                        state.ActualVelocity = 0;
-                        state.MotionType = AxisMotionType.None;
-                        ReportDone(reqId, false, "工艺暂停中止 (MC_Halt)", CommandCompletionStatus.CommandAborted, axisId);
-                    }
+                    var reqId = state.CurrentRequestId;
+                    done = new AxisDoneArgs(reqId, false, "工艺暂停中止 (MC_Halt)", CommandCompletionStatus.CommandAborted, axisId);
+                    state.ActualVelocity = 0;
+                    ClearAxisMotion_Locked(state);
                 }
             }
+
+            if (done != null) ReportDone(done);
         }
 
         /// <summary>
         /// Level 2: 控制卡受控停止 (MC_Stop, Stop Cat 1)。
+        /// 可观察差异：保留 <see cref="AxisMotionType.Stopping"/>(Cat1 停车中) 由仿真循环减速收敛后清除，
+        /// 并把当前位置设为减速终点；以 <see cref="CommandCompletionStatus.CommandAborted"/> 完结请求（不进入 ErrorStop）。
         /// </summary>
         public void Stop(int axisId) => StopMotion(axisId);
 
         public void StopMotion(int axisId)
         {
+            AxisDoneArgs? done = null;
             lock (_lock)
             {
-                if (_axisStates.TryGetValue(axisId, out var state))
+                if (_axisStates.TryGetValue(axisId, out var state) && state.MotionType != AxisMotionType.None)
                 {
-                    if (state.MotionType != AxisMotionType.None)
+                    var reqId = state.CurrentRequestId;
+                    done = new AxisDoneArgs(reqId, false, "受控减速停止 (MC_Stop)", CommandCompletionStatus.CommandAborted, axisId);
+
+                    if (state.MotionType == AxisMotionType.Jog)
                     {
-                        var reqId = state.CurrentRequestId;
+                        // Jog 无绝对目标，直接停稳
                         state.ActualVelocity = 0;
-                        state.MotionType = AxisMotionType.None;
-                        ReportDone(reqId, false, "受控减速停止 (MC_Stop)", CommandCompletionStatus.CommandAborted, axisId);
+                        ClearAxisMotion_Locked(state);
+                    }
+                    else
+                    {
+                        // Cat1 受控停车：保留运动类型形成可观察差异，以当前位置为减速终点
+                        state.MotionType = AxisMotionType.Stopping;
+                        state.TargetPosition = state.ActualPosition;
+                        state.TargetSpeed = 0;
+                        state.JogDir = 0;
                     }
                 }
             }
+
+            if (done != null) ReportDone(done);
         }
 
         /// <summary>
         /// Level 3: 硬件安全急停 (Emergency Stop / Hard Abort / STO, Stop Cat 0/1)。
+        /// 立即停止并进入 <see cref="AxisMotionType.ErrorStop"/> 锁定，直至 <see cref="ResetAxis"/>；
+        /// 在途请求以 <see cref="CommandCompletionStatus.Error"/> 完结（不留悬挂 TCS），速度/流式状态一并清除。
         /// </summary>
         public void EmergencyStop(int axisId) => Abort(axisId);
 
         public void Abort(int axisId, double decelRatio = 0)
         {
-            Guid reqId = Guid.Empty;
+            var doneList = new List<AxisDoneArgs>();
             lock (_lock)
             {
                 if (_axisStates.TryGetValue(axisId, out var state))
                 {
-                    reqId = state.CurrentRequestId;
+                    if (state.MotionType != AxisMotionType.None && state.CurrentRequestId != Guid.Empty)
+                    {
+                        doneList.Add(new AxisDoneArgs(state.CurrentRequestId, false,
+                            "硬件安全急停 (EmergencyStop/STO)", CommandCompletionStatus.Error, axisId));
+                    }
+                    state.ErrorStop = true;
                     state.ActualVelocity = 0;
-                    state.MotionType = AxisMotionType.None;
+                    ClearAxisMotion_Locked(state);
+                    state.MotionType = AxisMotionType.ErrorStop;
                 }
             }
 
-            if (reqId != Guid.Empty)
-            {
-                ReportDone(reqId, false, "硬件安全急停 (EmergencyStop/STO)", CommandCompletionStatus.Error, axisId);
-            }
+            foreach (var d in doneList) ReportDone(d);
         }
 
         public void EmergencyStopAll() => AbortAll();
 
         public void AbortAll()
         {
-            List<(Guid req, int ax)> abortReqs = new();
+            var doneList = new List<AxisDoneArgs>();
             lock (_lock)
             {
+                ClearStreaming_Locked(); // 流式插补一并急停
                 foreach (var state in _axisStates.Values)
                 {
                     if (state.MotionType != AxisMotionType.None && state.CurrentRequestId != Guid.Empty)
                     {
-                        abortReqs.Add((state.CurrentRequestId, state.Definition.AxisId));
+                        doneList.Add(new AxisDoneArgs(state.CurrentRequestId, false,
+                            "全局急停中止 (Global EmergencyStop)", CommandCompletionStatus.Error, state.Definition.AxisId));
                     }
+                    state.ErrorStop = true;
                     state.ActualVelocity = 0;
-                    state.MotionType = AxisMotionType.None;
+                    ClearAxisMotion_Locked(state);
+                    state.MotionType = AxisMotionType.ErrorStop;
                 }
             }
 
-            foreach (var item in abortReqs)
-            {
-                ReportDone(item.req, false, "全局急停中止 (Global EmergencyStop)", CommandCompletionStatus.Error, item.ax);
-            }
+            foreach (var d in doneList) ReportDone(d);
         }
 
         /// <summary>
-        /// 故障复位指令 (MC_Reset)。
+        /// 故障复位指令 (MC_Reset)。清除急停/故障锁定并恢复到 <see cref="AxisMotionType.None"/>(Standstill/Disabled 待命)，
+        /// 在途命令以 CommandAborted 完结；位置与 Homed 状态保留。
         /// </summary>
         public void ResetAxis(int axisId)
         {
+            var doneList = new List<AxisDoneArgs>();
             lock (_lock)
             {
                 if (_axisStates.TryGetValue(axisId, out var state))
                 {
-                    state.ActualVelocity = 0;
-                    state.MotionType = AxisMotionType.None;
+                    if (state.MotionType != AxisMotionType.None && state.CurrentRequestId != Guid.Empty)
+                    {
+                        doneList.Add(new AxisDoneArgs(state.CurrentRequestId, false,
+                            "轴复位，中止当前命令", CommandCompletionStatus.CommandAborted, axisId));
+                    }
+                    state.PositiveHardLimitFault = false;
+                    state.NegativeHardLimitFault = false;
+                    state.DriveAlarmFault = false;
+                    state.FollowingErrorFault = false;
+                    state.ErrorStop = false;
+                    ClearAxisMotion_Locked(state);
+                    state.HomingStage = HomeStage.Search;
                 }
             }
+
+            foreach (var d in doneList) ReportDone(d);
         }
 
         /// <summary>
@@ -669,6 +885,8 @@ namespace Sophon.Infrastructure.Motion.Sim
         /// <param name="active">是否激活</param>
         public void InjectFault(FaultKind kind, int axisId, bool active)
         {
+            var interrupted = new List<(Guid requestId, int axisId)>();
+
             lock (_lock)
             {
                 if (kind == FaultKind.Disconnected)
@@ -676,73 +894,99 @@ namespace Sophon.Infrastructure.Motion.Sim
                     if (active)
                     {
                         State = ConnectionState.Fault;
-                        // 停止所有轴
                         foreach (var st in _axisStates.Values)
                         {
+                            if (st.CurrentRequestId != Guid.Empty)
+                            {
+                                interrupted.Add((st.CurrentRequestId, st.Definition.AxisId));
+                            }
                             st.ActualVelocity = 0;
                             st.MotionType = AxisMotionType.None;
+                            st.CurrentRequestId = Guid.Empty;
                         }
                     }
                     else
                     {
                         State = ConnectionState.Ready;
                     }
-                    return;
                 }
-
-                if (!_axisStates.TryGetValue(axisId, out var state))
-                    return;
-
-                switch (kind)
+                else if (_axisStates.TryGetValue(axisId, out var state))
                 {
-                    case FaultKind.PositiveHardLimit:
-                        state.PositiveHardLimitFault = active;
-                        if (active)
-                        {
-                            state.ActualVelocity = 0;
-                            state.MotionType = AxisMotionType.None;
-                            string ptName = state.Definition.LimitPositiveIoName ?? $"Limit{axisId}+";
-                            Task.Run(() =>
+                    switch (kind)
+                    {
+                        case FaultKind.PositiveHardLimit:
+                            state.PositiveHardLimitFault = active;
+                            if (active)
                             {
-                                LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, ptName, true, true));
-                                AxisFault?.Invoke(new AxisFaultArgs(axisId, "HARD_LIMIT_POS", $"轴 {axisId} 正向硬限位触发"));
-                            });
-                        }
-                        break;
+                                if (state.CurrentRequestId != Guid.Empty)
+                                    interrupted.Add((state.CurrentRequestId, axisId));
+                                state.CurrentRequestId = Guid.Empty;
+                                state.ActualVelocity = 0;
+                                state.MotionType = AxisMotionType.None;
+                                state.ErrorStop = true;
+                                string ptName = state.Definition.LimitPositiveIoName ?? $"Limit{axisId}+";
+                                Task.Run(() =>
+                                {
+                                    try { LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, ptName, true, true)); } catch { }
+                                    try { AxisFault?.Invoke(new AxisFaultArgs(axisId, "HARD_LIMIT_POS", $"轴 {axisId} 正向硬限位触发")); } catch { }
+                                });
+                            }
+                            break;
 
-                    case FaultKind.NegativeHardLimit:
-                        state.NegativeHardLimitFault = active;
-                        if (active)
-                        {
-                            state.ActualVelocity = 0;
-                            state.MotionType = AxisMotionType.None;
-                            string ptName = state.Definition.LimitNegativeIoName ?? $"Limit{axisId}-";
-                            Task.Run(() =>
+                        case FaultKind.NegativeHardLimit:
+                            state.NegativeHardLimitFault = active;
+                            if (active)
                             {
-                                LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, ptName, false, true));
-                                AxisFault?.Invoke(new AxisFaultArgs(axisId, "HARD_LIMIT_NEG", $"轴 {axisId} 负向硬限位触发"));
-                            });
-                        }
-                        break;
+                                if (state.CurrentRequestId != Guid.Empty)
+                                    interrupted.Add((state.CurrentRequestId, axisId));
+                                state.CurrentRequestId = Guid.Empty;
+                                state.ActualVelocity = 0;
+                                state.MotionType = AxisMotionType.None;
+                                state.ErrorStop = true;
+                                string ptName = state.Definition.LimitNegativeIoName ?? $"Limit{axisId}-";
+                                Task.Run(() =>
+                                {
+                                    try { LimitTriggered?.Invoke(new LimitTriggeredArgs(axisId, ptName, false, true)); } catch { }
+                                    try { AxisFault?.Invoke(new AxisFaultArgs(axisId, "HARD_LIMIT_NEG", $"轴 {axisId} 负向硬限位触发")); } catch { }
+                                });
+                            }
+                            break;
 
-                    case FaultKind.DriveAlarm:
-                        state.DriveAlarmFault = active;
-                        if (active)
-                        {
-                            state.ActualVelocity = 0;
-                            state.MotionType = AxisMotionType.None;
-                            Task.Run(() => AxisFault?.Invoke(new AxisFaultArgs(axisId, "DRIVE_ALARM", $"轴 {axisId} 驱动器报警")));
-                        }
-                        break;
+                        case FaultKind.DriveAlarm:
+                            state.DriveAlarmFault = active;
+                            if (active)
+                            {
+                                if (state.CurrentRequestId != Guid.Empty)
+                                    interrupted.Add((state.CurrentRequestId, axisId));
+                                state.CurrentRequestId = Guid.Empty;
+                                state.ActualVelocity = 0;
+                                state.MotionType = AxisMotionType.None;
+                                state.ErrorStop = true;
+                                Task.Run(() =>
+                                {
+                                    try { AxisFault?.Invoke(new AxisFaultArgs(axisId, "DRIVE_ALARM", $"轴 {axisId} 驱动器报警")); } catch { }
+                                });
+                            }
+                            break;
 
-                    case FaultKind.FollowingError:
-                        state.FollowingErrorFault = active;
-                        if (active)
-                        {
-                            Task.Run(() => AxisFault?.Invoke(new AxisFaultArgs(axisId, "FOLLOWING_ERROR", $"轴 {axisId} 跟随误差超差")));
-                        }
-                        break;
+                        case FaultKind.FollowingError:
+                            state.FollowingErrorFault = active;
+                            if (active)
+                            {
+                                state.ErrorStop = true;
+                                Task.Run(() =>
+                                {
+                                    try { AxisFault?.Invoke(new AxisFaultArgs(axisId, "FOLLOWING_ERROR", $"轴 {axisId} 跟随误差超差")); } catch { }
+                                });
+                            }
+                            break;
+                    }
                 }
+            }
+
+            foreach (var item in interrupted)
+            {
+                ReportDone(item.requestId, false, "故障注入中止当前命令", CommandCompletionStatus.Error, item.axisId);
             }
         }
 
@@ -792,6 +1036,9 @@ namespace Sophon.Infrastructure.Motion.Sim
                 // 限制单步最大积分步长（防止调试中断恢复后位置突变）
                 if (dt > 0.05) dt = 0.05;
 
+                // 由仿真循环统一推进单调时刻锚点（单位 ms），供回零等超时判定使用（无 Thread.Sleep 到调用线程）
+                _lastElapsedMs = sw.ElapsedMilliseconds;
+
                 List<AxisDoneArgs> doneList = new();
 
                 lock (_lock)
@@ -814,8 +1061,10 @@ namespace Sophon.Infrastructure.Motion.Sim
                     foreach (var kv in _axisStates)
                     {
                         var state = kv.Value;
-                        if (!state.Enabled || state.MotionType == AxisMotionType.None)
+                        if (!state.Enabled || state.MotionType == AxisMotionType.None
+                            || state.MotionType == AxisMotionType.ErrorStop)
                         {
+                            // ErrorStop 为锁定态：不进积分、不运动，直到 ResetAxis
                             state.ActualVelocity = 0;
                             continue;
                         }
@@ -842,6 +1091,11 @@ namespace Sophon.Infrastructure.Motion.Sim
                             case AxisMotionType.Homing:
                                 StepHoming(state, dt, doneList);
                                 break;
+
+                            case AxisMotionType.Stopping:
+                                // Cat1 受控停车：按当前位置减速收敛后清除 Stopping（AxisManager 到零速后清 Stopping）
+                                StepStopping(state, dt);
+                                break;
                         }
                     }
                 }
@@ -854,6 +1108,24 @@ namespace Sophon.Infrastructure.Motion.Sim
 
                 Thread.Sleep(2);
             }
+        }
+
+        /// <summary>Cat1 受控停车减速收敛：速度必须与"停车态"同步清除，避免出现半速且仍 Stopping 的中间态。</summary>
+        private void StepStopping(SimAxisState state, double dt)
+        {
+            double decelPerStep = Math.Max(state.Decel, 1.0) * dt;
+            double magnitude = Math.Max(Math.Abs(state.ActualVelocity) - decelPerStep, 0.0);
+            if (magnitude <= 0.0)
+            {
+                // 已停稳：同步清除速度与 Stopping 态
+                state.ActualVelocity = 0;
+                state.MotionType = AxisMotionType.None;
+                return;
+            }
+
+            double sign = Math.Sign(state.ActualVelocity == 0 ? 1 : state.ActualVelocity);
+            state.ActualVelocity = magnitude * sign;
+            state.ActualPosition += state.ActualVelocity * dt;
         }
 
         private void StepMove(SimAxisState state, double dt, List<AxisDoneArgs> doneList)
@@ -950,56 +1222,139 @@ namespace Sophon.Infrastructure.Motion.Sim
 
         private void StepHoming(SimAxisState state, double dt, List<AxisDoneArgs> doneList)
         {
-            // 回零模式支持：CurrentPosition 或 仿真寻零（碰原点IO/限位再归零）
-            if (state.HomeMode == HomingMode.CurrentPosition)
+            // 回零总超时熔断（任何阶段共用）：IEC 走停 + 限时保护，禁止永久挂起
+            if (ElapsedSinceMs(state.HomeStartElapsedMs) > HomeTotalTimeoutMs)
             {
-                state.ActualPosition = 0;
-                state.ActualVelocity = 0;
-                state.Homed = true;
-                state.MotionType = AxisMotionType.None;
-                doneList.Add(new AxisDoneArgs(state.CurrentRequestId, true, "当前位置回零成功"));
+                FailHome_Locked(state, doneList, $"回零超时（{HomeTotalTimeoutMs} ms 内未完成 {state.HomingStage} 阶段）");
                 return;
             }
 
-            int dir = state.HomeDir == HomeDirection.Positive ? 1 : -1;
-            double homeV = dir * state.HomeSpeed;
-
             switch (state.HomingStage)
             {
-                case 0:
-                    // 阶段 0：朝回零方向运动，寻找原点信号或走固定距离
-                    state.ActualVelocity = homeV;
-                    state.ActualPosition += state.ActualVelocity * dt;
-
-                    bool trigger = false;
-                    if (_ioController != null && !string.IsNullOrWhiteSpace(state.Definition.HomeIoName))
-                    {
-                        trigger = _ioController.ReadDi(state.Definition.HomeIoName);
-                    }
-
-                    // 仿真环境：若没有外部 IO 触发，移动一定距离（例如 50mm）后模拟碰触原点
-                    if (trigger || Math.Abs(state.ActualPosition - state.HomeStartPosition) >= 50.0)
-                    {
-                        state.HomingStage = 1;
-                    }
+                // Zeroing：当前位置置零模式（Preparing → Zeroing）
+                case HomeStage.Search when state.HomeMode == HomingMode.CurrentPosition:
+                    state.HomingStage = HomeStage.Zeroing;
                     break;
 
-                case 1:
-                    // 阶段 1：模拟碰原点后反向微调脱离
-                    state.ActualVelocity = -homeV * 0.5;
-                    state.ActualPosition += state.ActualVelocity * dt;
-
-                    // 反向脱离移动 5mm
-                    if (Math.Abs(state.ActualPosition) >= 5.0)
-                    {
-                        state.ActualPosition = 0;
-                        state.ActualVelocity = 0;
-                        state.Homed = true;
-                        state.MotionType = AxisMotionType.None;
-                        doneList.Add(new AxisDoneArgs(state.CurrentRequestId, true, "回零完成"));
-                    }
+                // Search：朝回零方向搜索原点信号（IO 事件驱动，行程/耗时双兜底）
+                case HomeStage.Search:
+                    StepHomeSearch(state, dt, doneList);
                     break;
+
+                // Detected：记录触发原点瞬间的位置
+                case HomeStage.Detected:
+                    state.HomeDetectedPosition = state.ActualPosition;
+                    state.HomingStage = HomeStage.Escaping;
+                    break;
+
+                // Escaping：反向退离原点
+                case HomeStage.Escaping:
+                    StepHomeEscape(state, dt, doneList);
+                    break;
+
+                // Settling：退离后停稳确认
+                case HomeStage.Settling:
+                    StepHomeSettling(state, dt);
+                    break;
+
+                // Zeroing：置零并通过 AxisDone 完成（完成只走事件，不静默成功）
+                case HomeStage.Zeroing:
+                {
+                    var reqId = state.CurrentRequestId;
+                    state.ActualPosition = 0;
+                    state.ActualVelocity = 0;
+                    state.Homed = true;
+                    state.MotionType = AxisMotionType.None;
+                    state.CurrentRequestId = Guid.Empty;
+                    state.HomingStage = HomeStage.Search;
+                    doneList.Add(new AxisDoneArgs(reqId, true, "回零成功"));
+                    break;
+                }
             }
+        }
+
+        /// <summary>Search：沿回零方向搜索原点，命中即转 Detected；行程耗尽则明确失败（替代旧的固定 50mm 成功伪逻辑）。</summary>
+        private void StepHomeSearch(SimAxisState state, double dt, List<AxisDoneArgs> doneList)
+        {
+            // 硬限位 / 故障 / 急停：失败可见，禁止静默继续寻零
+            if (ShouldStopAxis_Locked(state))
+            {
+                FailHome_Locked(state, doneList, "回零失败：寻零过程中检测到硬限位/故障/急停");
+                return;
+            }
+
+            bool trigger = false;
+            if (_ioController != null && !string.IsNullOrWhiteSpace(state.Definition.HomeIoName))
+            {
+                trigger = _ioController.ReadDi(state.Definition.HomeIoName);
+            }
+
+            double homeV = state.JogDir * state.HomeSpeed;
+            state.ActualVelocity = homeV;
+            state.ActualPosition += homeV * dt;
+
+            double traveled = Math.Abs(state.ActualPosition - state.HomeStartPosition);
+            if (trigger)
+            {
+                state.HomingStage = HomeStage.Detected;
+            }
+            else if (traveled >= state.HomeSearchExtent)
+            {
+                FailHome_Locked(state, doneList, "回零失败：走满搜索行程仍未检测到原点信号");
+            }
+        }
+
+        /// <summary>Escaping：反向退离原点到设定距离，保持速度交给 Settling 收敛。</summary>
+        private void StepHomeEscape(SimAxisState state, double dt, List<AxisDoneArgs> doneList)
+        {
+            if (ShouldStopAxis_Locked(state))
+            {
+                FailHome_Locked(state, doneList, "回零失败：退离过程中检测到硬限位/故障/急停");
+                return;
+            }
+
+            int escapeDir = -state.JogDir;
+            double escapeDistance = Math.Max(state.HomeEscapeExtent, 0.05);
+            state.ActualVelocity = escapeDir * state.HomeSpeed * HomeEscapeSpeedRatio;
+            state.ActualPosition += state.ActualVelocity * dt;
+
+            if (Math.Abs(state.ActualPosition - state.HomeDetectedPosition) >= escapeDistance)
+            {
+                state.ActualPosition = state.HomeDetectedPosition + escapeDir * escapeDistance;
+                state.HomingStage = HomeStage.Settling;
+            }
+        }
+
+        /// <summary>Settling：退离后速度收敛到阈值即认为停稳，转 Zeroing。</summary>
+        private void StepHomeSettling(SimAxisState state, double dt)
+        {
+            state.ActualVelocity *= HomeSettleFactor;
+            state.ActualPosition += state.ActualVelocity * dt;
+            if (Math.Abs(state.ActualVelocity) <= HomeSettleVThreshold)
+            {
+                state.ActualVelocity = 0;
+                state.HomingStage = HomeStage.Zeroing;
+            }
+        }
+
+        /// <summary>相对当前仿真时刻已过去的毫秒数（锚点由 ITimeSource 校准的仿真循环更新，无 Thread.Sleep）。</summary>
+        private long ElapsedSinceMs(long anchorMs) => _lastElapsedMs - anchorMs;
+
+        /// <summary>该轴是否处于故障/急停锁定（回零过程中同样要失败可见）。调用方需持锁。</summary>
+        private static bool ShouldStopAxis_Locked(SimAxisState state)
+            => state.ErrorStop || state.PositiveHardLimitFault || state.NegativeHardLimitFault
+                || state.DriveAlarmFault || state.FollowingErrorFault;
+
+        /// <summary>回零失败：以 Error 完结 AxisDone 并停住当前位置（不置零、不标记 Homed）。调用方需持锁。</summary>
+        private static void FailHome_Locked(SimAxisState state, List<AxisDoneArgs> doneList, string reason)
+        {
+            var reqId = state.CurrentRequestId;
+            int axisId = state.Definition.AxisId;
+            state.ActualVelocity = 0;
+            state.MotionType = AxisMotionType.None;
+            state.CurrentRequestId = Guid.Empty;
+            state.HomingStage = HomeStage.Search;
+            doneList.Add(new AxisDoneArgs(reqId, false, reason, CommandCompletionStatus.Error, axisId));
         }
 
         public void Dispose()

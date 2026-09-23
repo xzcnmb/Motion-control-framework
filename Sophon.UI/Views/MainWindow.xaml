@@ -73,8 +73,7 @@
                             <RowDefinition Height="34" />
                         </Grid.RowDefinitions>
 
-                        <views:HomeView Grid.Row="0" />
-                        <ContentControl x:Name="ContentHost" Grid.Row="0" Background="Transparent" prism:RegionManager.RegionName="ContentRegion" />
+                        <ContentControl x:Name="ContentHost" Grid.Row="0" Background="#F0F2F5" prism:RegionManager.RegionName="ContentRegion" />
 
                         <Border Grid.Row="1" Background="White" BorderBrush="#E8E8E8" BorderThickness="0,1,0,0">
                             <views:BottomView VerticalAlignment="Center" />

@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Common;
 using Sophon.Contracts;
 
 namespace Sophon.Infrastructure.Config
@@ -57,9 +58,10 @@ namespace Sophon.Infrastructure.Config
 
                     return JsonSerializer.Deserialize<List<IoPointDefinition>>(json, JsonOptions) ?? new List<IoPointDefinition>();
                 }
-                catch
+                catch (JsonException)
                 {
-                    return new List<IoPointDefinition>();
+                    try { AtomicFileStore.QuarantineCorruptFile(_filePath); } catch { }
+                    throw new InvalidDataException($"IO 配置文件损坏，已隔离：{_filePath}");
                 }
             }
         }
@@ -80,7 +82,7 @@ namespace Sophon.Infrastructure.Config
                 }
 
                 string json = JsonSerializer.Serialize(points, JsonOptions);
-                File.WriteAllText(_filePath, json, Utf8NoBom);
+                AtomicFileStore.WriteAllText(_filePath, json, Utf8NoBom);
             }
         }
 

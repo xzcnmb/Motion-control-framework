@@ -11,6 +11,25 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <!-- XAML 引用的图标资源：SDK 不会自动把 PNG 当 WPF Resource，必须显式声明，否则 /Resources/*.png 加载不到 -->
+  <ItemGroup>
+    <Resource Include="Resources\Alarm.png" />
+    <Resource Include="Resources\Axis.png" />
+    <Resource Include="Resources\Close.png" />
+    <Resource Include="Resources\History.png" />
+    <Resource Include="Resources\Home.png" />
+    <Resource Include="Resources\Infra.png" />
+    <Resource Include="Resources\IO.png" />
+    <Resource Include="Resources\Max.png" />
+    <Resource Include="Resources\Min.png" />
+    <Resource Include="Resources\Param.png" />
+    <Resource Include="Resources\Protocol.png" />
+    <Resource Include="Resources\Register.png" />
+    <Resource Include="Resources\Station.png" />
+    <Resource Include="Resources\User.png" />
+    <Resource Include="Resources\logo.png" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Sophon.Contracts\Sophon.Contracts.csproj" />

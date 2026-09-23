@@ -59,16 +59,20 @@
                     Grid.Column="2"
                     Orientation="Horizontal"
                     VerticalAlignment="Center">
-                    <Button
-                        Margin="8,0"
-                        Command="{Binding ClearSelectedAlarmCommand}"
-                        Content="复位选中报警"
-                        Style="{StaticResource ButtonDashedSuccess}" />
-                    <Button
-                        Margin="8,0"
-                        Command="{Binding ClearAllAlarmsCommand}"
-                        Content="全部报警复位"
-                        Style="{StaticResource ButtonDashedDanger}" />
+                    <StackPanel Orientation="Vertical" Margin="8,0">
+                        <Button
+                            Command="{Binding ClearSelectedAlarmCommand}"
+                            Content="复位选中报警"
+                            Style="{StaticResource ButtonDashedSuccess}" />
+                        <TextBlock Text="仅清除满足现场复位条件的报警" FontSize="11" Foreground="#64748B" Margin="0,3,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Vertical" Margin="8,0">
+                        <Button
+                            Command="{Binding ClearAllAlarmsCommand}"
+                            Content="全部报警复位"
+                            Style="{StaticResource ButtonDashedDanger}" />
+                        <TextBlock Text="高等级报警仍需硬件/限位复位" FontSize="11" Foreground="#8C5A00" Margin="0,3,0,0" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

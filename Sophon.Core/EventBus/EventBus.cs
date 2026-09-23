@@ -62,7 +62,15 @@ namespace Sophon.Core
 
                 foreach (var handler in tempList)
                 {
-                    (handler as Action<T>)?.Invoke(@event);
+                    try
+                    {
+                        (handler as Action<T>)?.Invoke(@event);
+                    }
+                    catch
+                    {
+                        // 一个订阅者的异常不能阻断同一事件的其余订阅者。
+                        // 生产日志由上层上下文记录；事件总线保持隔离语义。
+                    }
                 }
             }
         }

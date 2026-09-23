@@ -34,8 +34,13 @@ namespace Sophon.Core
 
         void SetData<T>(string key, T value);
 
-        /// <summary>换配方时清掉上一张图留下的变量，避免视觉坐标串到新配方。</summary>
+        /// <summary>换配方时清掉全部变量，避免视觉坐标串到新配方。</summary>
         void ClearData();
+
+        /// <summary>
+        /// 清理循环周期的临时变量。仅保留以 <c>Persistent.</c> 开头的显式跨圈变量。
+        /// </summary>
+        void ClearTransientData();
 
         IFlowContext Clone();
     }

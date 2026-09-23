@@ -1,5 +1,6 @@
 ﻿using Common;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Sophon.Core
 {
@@ -62,6 +63,20 @@ namespace Sophon.Core
             lock (_dataLock)
             {
                 _data.Clear();
+            }
+        }
+
+        public void ClearTransientData()
+        {
+            lock (_dataLock)
+            {
+                var transientKeys = _data.Keys
+                    .Where(key => !key.StartsWith("Persistent.", System.StringComparison.Ordinal))
+                    .ToList();
+                foreach (var key in transientKeys)
+                {
+                    _data.Remove(key);
+                }
             }
         }
 

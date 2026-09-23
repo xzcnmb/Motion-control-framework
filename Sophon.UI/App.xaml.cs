@@ -1,6 +1,7 @@
 using Common;
 using DryIoc;
 using Newtonsoft.Json;
+using NLog;
 using Prism;
 using Prism.Container.DryIoc;
 using Prism.Ioc;
@@ -13,6 +14,8 @@ using Sophon.UI.Views;
 using Sophon.UI.Views.SubViews;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -20,6 +23,8 @@ namespace Sophon.UI
 {
     public partial class App : PrismApplicationBase
     {
+        private static readonly Logger BootstrapLogger = LogManager.GetLogger("App.Bootstrap");
+
         protected override IContainerExtension CreateContainerExtension()
         {
             return new DryIocContainerExtension();
@@ -87,27 +92,44 @@ namespace Sophon.UI
             }
 
             var regionManager = Container.Resolve<IRegionManager>();
-            try
-            {
-                if (regionManager.Regions.ContainsRegionWithName("ContentRegion"))
-                {
-                    var region = regionManager.Regions["ContentRegion"];
-                    foreach (var view in System.Linq.Enumerable.ToArray(region.Views))
-                    {
-                        region.Remove(view);
-                    }
-                }
-            }
-            catch
-            {
-            }
+            regionManager.RequestNavigate("ContentRegion", "HomeView");
         }
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            base.OnStartup(e);
+            // Prism 在 base.OnStartup 内完成容器注册、Shell 创建和 OnInitialized 调用。
+            // 先安装全局边界，保证启动阶段的配置/驱动异常也能留下完整证据。
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+            ConfigureJsonSettings();
+            VerifyLoggingTarget();
+            base.OnStartup(e);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            try
+            {
+                BootstrapLogger.Info("应用正在退出");
+                LogManager.Flush(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(ex);
+            }
+            finally
+            {
+                TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
+                AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+                DispatcherUnhandledException -= OnDispatcherUnhandledException;
+                base.OnExit(e);
+            }
+        }
+
+        private static void ConfigureJsonSettings()
+        {
             JsonConvert.DefaultSettings = () => new JsonSerializerSettings
             {
                 Converters = new List<JsonConverter>
@@ -117,29 +139,57 @@ namespace Sophon.UI
             };
         }
 
-        private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+        private static void VerifyLoggingTarget()
         {
             try
             {
-                HandyControl.Controls.Growl.Error($"界面异常已拦截，未退出：{e.Exception.Message}");
+                string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NLog.config");
+                if (!File.Exists(configPath))
+                {
+                    BootstrapLogger.Error($"未找到 NLog.config：{configPath}");
+                    return;
+                }
+
+                BootstrapLogger.Info("日志系统已启动");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"日志自检失败: {ex}");
+            }
+        }
+
+        private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+        {
+            BootstrapLogger.Fatal(e.Exception, "UI 未处理异常");
+            try
+            {
+                HandyControl.Controls.Growl.Error($"界面发生未处理异常，详情已写入日志：{e.Exception.Message}");
             }
             catch
             {
                 MessageBox.Show(e.Exception.Message, "界面异常", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            e.Handled = true;
+
+            // UI 线程异常后的状态不可假定仍然一致，不继续吞掉异常运行。
+            e.Handled = false;
         }
 
         private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
             {
-                try
-                {
-                    HandyControl.Controls.Growl.Error($"后台异常：{ex.Message}");
-                }
-                catch { }
+                BootstrapLogger.Fatal(ex, $"后台未处理异常（IsTerminating={e.IsTerminating}）");
             }
+            else
+            {
+                BootstrapLogger.Fatal($"后台未处理异常：{e.ExceptionObject}");
+            }
+        }
+
+        private static void OnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+            BootstrapLogger.Error(e.Exception, "未观察到的后台任务异常");
+            e.SetObserved();
         }
     }
 }

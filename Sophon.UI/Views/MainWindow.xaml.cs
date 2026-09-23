@@ -1,8 +1,6 @@
 using Prism;
 using System;
-using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace Sophon.UI.Views
@@ -13,21 +11,6 @@ namespace Sophon.UI.Views
         {
             InitializeComponent();
             StateChanged += MainWindow_StateChanged;
-            Loaded += (_, __) => HookContentHost();
-        }
-
-        private void HookContentHost()
-        {
-            if (ContentHost == null) return;
-            UpdateContentHostHitTest();
-            DependencyPropertyDescriptor
-                .FromProperty(ContentControl.ContentProperty, typeof(ContentControl))
-                .AddValueChanged(ContentHost, (_, __) => UpdateContentHostHitTest());
-        }
-
-        private void UpdateContentHostHitTest()
-        {
-            ContentHost.IsHitTestVisible = ContentHost.Content != null;
         }
 
         private void MainWindow_StateChanged(object sender, EventArgs e)

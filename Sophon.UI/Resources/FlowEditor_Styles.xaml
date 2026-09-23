@@ -19,7 +19,16 @@
             Source="{Binding Source.Anchor}"
             Target="{Binding Target.Anchor}"
             Stroke="#1890FF"
-            StrokeThickness="2.5" />
+            StrokeThickness="2.5"
+            DisconnectCommand="{Binding DataContext.RemoveConnectionCommand, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}">
+            <nodify:LineConnection.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="删除此连线"
+                              Command="{Binding PlacementTarget.DisconnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                </ContextMenu>
+            </nodify:LineConnection.ContextMenu>
+        </nodify:LineConnection>
     </DataTemplate>
 
     <!-- 待决连线样式模版（拖拽连线） -->

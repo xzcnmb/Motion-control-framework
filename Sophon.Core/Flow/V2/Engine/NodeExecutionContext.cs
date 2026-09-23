@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json;
 using Sophon.Contracts;
 
@@ -19,6 +20,7 @@ namespace Sophon.Core.Flow.V2
         public IMotionController? MotionController { get; }
         public IIoController? IoController { get; }
         public IEventBus? EventBus { get; }
+        public IReadOnlyCollection<string> FlowCallStack { get; }
 
         public NodeExecutionContext(
             IFlowContext flowContext,
@@ -27,7 +29,8 @@ namespace Sophon.Core.Flow.V2
             IMotionController? motionController = null,
             IIoController? ioController = null,
             IEventBus? eventBus = null,
-            IServiceProvider? services = null)
+            IServiceProvider? services = null,
+            IReadOnlyCollection<string>? flowCallStack = null)
         {
             FlowContext = flowContext ?? throw new ArgumentNullException(nameof(flowContext));
             Node = node ?? throw new ArgumentNullException(nameof(node));
@@ -36,6 +39,7 @@ namespace Sophon.Core.Flow.V2
             IoController = ioController;
             EventBus = eventBus;
             Services = services;
+            FlowCallStack = flowCallStack ?? Array.Empty<string>();
         }
 
         /// <summary>
@@ -69,7 +73,7 @@ namespace Sophon.Core.Flow.V2
                     return JsonSerializer.Deserialize<T>(jsonElem.GetRawText());
                 }
 
-                return (T)Convert.ChangeType(rawVal, typeof(T));
+                return (T)Convert.ChangeType(rawVal, typeof(T), CultureInfo.InvariantCulture);
             }
             catch
             {

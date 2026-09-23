@@ -27,6 +27,9 @@ namespace Sophon.Infrastructure.Motion.Axis
             public bool Enabled { get; set; }
             public bool Homed { get; set; }
             public Guid LastRequestId { get; set; }
+            public bool CommandInFlight { get; set; }
+            public long StopRequestedTick { get; set; }
+            public bool ReadFaultReported { get; set; }
         }
 
         private readonly IMotionController _controller;
@@ -78,7 +81,7 @@ namespace Sophon.Infrastructure.Motion.Axis
             {
                 foreach (var ax in _controller.Axes)
                 {
-                    _axes[ax.AxisId] = new AxisInternalContext
+                    var initial = new AxisInternalContext
                     {
                         Definition = ax,
                         State = AxisState.Disabled,
@@ -87,6 +90,22 @@ namespace Sophon.Infrastructure.Motion.Axis
                         Enabled = false,
                         Homed = false
                     };
+
+                    // 在启动刷新线程前取得一次同步快照，避免刚创建管理器时示教/监控读到默认零值。
+                    try
+                    {
+                        initial.Position = _controller.GetPosition(ax.AxisId);
+                        initial.Velocity = _controller.GetVelocity(ax.AxisId);
+                        initial.Enabled = _controller.IsAxisEnabled(ax.AxisId);
+                        initial.Homed = _controller.IsAxisHomed(ax.AxisId);
+                        initial.State = initial.Enabled ? AxisState.Standstill : AxisState.Disabled;
+                    }
+                    catch
+                    {
+                        initial.State = AxisState.ErrorStop;
+                    }
+
+                    _axes[ax.AxisId] = initial;
                 }
             }
 
@@ -108,19 +127,24 @@ namespace Sophon.Infrastructure.Motion.Axis
         {
             lock (_lock)
             {
-                foreach (var ctx in _axes.Values)
+                AxisInternalContext? ctx = _axes.Values.FirstOrDefault(candidate =>
+                    candidate.LastRequestId == args.RequestId && args.RequestId != Guid.Empty);
+                if (ctx == null && _axes.TryGetValue(args.AxisId, out var byAxis))
                 {
-                    if (ctx.LastRequestId == args.RequestId)
+                    ctx = byAxis;
+                }
+
+                if (ctx != null && ctx.LastRequestId == args.RequestId && args.RequestId != Guid.Empty)
+                {
+                    ctx.CommandInFlight = false;
+                    if (args.Status == CommandCompletionStatus.Error)
                     {
-                        if (args.Status == CommandCompletionStatus.Error)
-                        {
-                            ctx.State = AxisState.ErrorStop;
-                        }
-                        else if (ctx.State != AxisState.ErrorStop && ctx.State != AxisState.Disabled)
-                        {
-                            // 运动完成或受控停止停稳后，恢复为静止就绪 Standstill
-                            ctx.State = AxisState.Standstill;
-                        }
+                        ctx.State = AxisState.ErrorStop;
+                    }
+                    else if (ctx.State != AxisState.ErrorStop && ctx.State != AxisState.Disabled)
+                    {
+                        // Done/CommandAborted 都表示当前命令已结束；受控停不应永久锁死轴。
+                        ctx.State = AxisState.Standstill;
                     }
                 }
             }
@@ -237,12 +261,20 @@ namespace Sophon.Infrastructure.Motion.Axis
         /// </summary>
         public void DisableAxis(int axisId)
         {
+            if (!_axes.ContainsKey(axisId))
+            {
+                throw new ArgumentOutOfRangeException(nameof(axisId), axisId, "未注册的轴号");
+            }
+
             _controller.DisableAxis(axisId);
             lock (_lock)
             {
                 if (_axes.TryGetValue(axisId, out var ctx))
                 {
                     ctx.Enabled = false;
+                    ctx.CommandInFlight = false;
+                    ctx.LastRequestId = Guid.Empty;
+                    ctx.StopRequestedTick = 0;
                     ctx.State = AxisState.Disabled;
                 }
             }
@@ -296,6 +328,7 @@ namespace Sophon.Infrastructure.Motion.Axis
                 if (_axes.TryGetValue(axisId, out var ctx))
                 {
                     ctx.LastRequestId = req;
+                    ctx.CommandInFlight = true;
                     if (ctx.State != AxisState.ErrorStop && ctx.State != AxisState.Stopping && ctx.Enabled)
                     {
                         ctx.State = AxisState.DiscreteMotion;
@@ -330,9 +363,28 @@ namespace Sophon.Infrastructure.Motion.Axis
             {
                 if (_axes.TryGetValue(axisId, out var ctx) && ctx.State != AxisState.ErrorStop && ctx.State != AxisState.Stopping && ctx.Enabled)
                 {
+                    ctx.LastRequestId = Guid.Empty;
+                    ctx.CommandInFlight = true;
                     ctx.State = AxisState.DiscreteMotion;
                 }
             }
+
+            _ = task.ContinueWith(completed =>
+            {
+                if (!completed.IsCompletedSuccessfully) return;
+                var args = completed.Result;
+                lock (_lock)
+                {
+                    if (_axes.TryGetValue(args.AxisId, out var ctx) && ctx.CommandInFlight)
+                    {
+                        ctx.LastRequestId = args.RequestId;
+                        ctx.CommandInFlight = false;
+                        ctx.State = args.Status == CommandCompletionStatus.Error
+                            ? AxisState.ErrorStop
+                            : ctx.State == AxisState.Disabled ? AxisState.Disabled : AxisState.Standstill;
+                    }
+                }
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             return task;
         }
 
@@ -423,9 +475,28 @@ namespace Sophon.Infrastructure.Motion.Axis
             {
                 if (_axes.TryGetValue(axisId, out var ctx) && ctx.State != AxisState.ErrorStop && ctx.State != AxisState.Stopping && ctx.Enabled)
                 {
+                    ctx.LastRequestId = Guid.Empty;
+                    ctx.CommandInFlight = true;
                     ctx.State = AxisState.Homing;
                 }
             }
+
+            _ = task.ContinueWith(completed =>
+            {
+                if (!completed.IsCompletedSuccessfully) return;
+                var args = completed.Result;
+                lock (_lock)
+                {
+                    if (_axes.TryGetValue(args.AxisId, out var ctx) && ctx.CommandInFlight)
+                    {
+                        ctx.LastRequestId = args.RequestId;
+                        ctx.CommandInFlight = false;
+                        ctx.State = args.Status == CommandCompletionStatus.Error
+                            ? AxisState.ErrorStop
+                            : ctx.State == AxisState.Disabled ? AxisState.Disabled : AxisState.Standstill;
+                    }
+                }
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             return task;
         }
 
@@ -479,14 +550,34 @@ namespace Sophon.Infrastructure.Motion.Axis
         /// </summary>
         public void Stop(int axisId)
         {
-            _controller.Stop(axisId);
+            bool shouldStop;
             lock (_lock)
             {
-                if (_axes.TryGetValue(axisId, out var ctx) && ctx.State != AxisState.Disabled && ctx.State != AxisState.ErrorStop)
+                if (!_axes.TryGetValue(axisId, out var ctx))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(axisId), axisId, "未注册的轴号");
+                }
+
+                if (ctx.State == AxisState.Disabled || ctx.State == AxisState.ErrorStop)
+                {
+                    return;
+                }
+
+                shouldStop = ctx.CommandInFlight || Math.Abs(ctx.Velocity) > 0.0001;
+                if (shouldStop)
                 {
                     ctx.State = AxisState.Stopping;
+                    ctx.StopRequestedTick = Environment.TickCount64;
+                }
+                else
+                {
+                    ctx.State = AxisState.Standstill;
+                    ctx.StopRequestedTick = 0;
                 }
             }
+
+            // 不持有 AxisManager 锁调用驱动，避免驱动回调反向进入管理器造成死锁。
+            _controller.Stop(axisId);
         }
 
         public void StopMotion(int axisId) => Stop(axisId);
@@ -545,13 +636,21 @@ namespace Sophon.Infrastructure.Motion.Axis
         /// </summary>
         public void ResetAxis(int axisId)
         {
+            if (!_axes.ContainsKey(axisId))
+            {
+                throw new ArgumentOutOfRangeException(nameof(axisId), axisId, "未注册的轴号");
+            }
+
             _controller.ResetAxis(axisId);
             lock (_lock)
             {
                 if (_axes.TryGetValue(axisId, out var ctx))
                 {
-                    if (ctx.State == AxisState.ErrorStop)
+                    if (ctx.State == AxisState.ErrorStop || ctx.State == AxisState.Stopping)
                     {
+                        ctx.CommandInFlight = false;
+                        ctx.LastRequestId = Guid.Empty;
+                        ctx.StopRequestedTick = 0;
                         ctx.State = ctx.Enabled ? AxisState.Standstill : AxisState.Disabled;
                     }
                 }
@@ -610,55 +709,120 @@ namespace Sophon.Infrastructure.Motion.Axis
         {
             while (!_cts.IsCancellationRequested)
             {
-                List<AxisSnapshot> snapshots;
-                lock (_lock)
+                try
                 {
-                    foreach (var kv in _axes)
+                    List<int> axisIds;
+                    lock (_lock)
                     {
-                        int axisId = kv.Key;
-                        var ctx = kv.Value;
+                        axisIds = _axes.Keys.ToList();
+                    }
 
-                        ctx.Position = _controller.GetPosition(axisId);
-                        ctx.Velocity = _controller.GetVelocity(axisId);
-                        ctx.Enabled = _controller.IsAxisEnabled(axisId);
-                        ctx.Homed = _controller.IsAxisHomed(axisId);
-
-                        // 状态机同步 (PLCopen 语义)
-                        if (!ctx.Enabled)
+                    var readings = new Dictionary<int, (double position, double velocity, bool enabled, bool homed)>();
+                    foreach (int axisId in axisIds)
+                    {
+                        try
                         {
-                            ctx.State = AxisState.Disabled;
+                            readings[axisId] = (
+                                _controller.GetPosition(axisId),
+                                _controller.GetVelocity(axisId),
+                                _controller.IsAxisEnabled(axisId),
+                                _controller.IsAxisHomed(axisId));
                         }
-                        else if (ctx.State == AxisState.Disabled)
+                        catch (Exception ex)
                         {
-                            ctx.State = AxisState.Standstill;
-                        }
-                        else if (ctx.State == AxisState.ContinuousMotion || ctx.State == AxisState.Jogging)
-                        {
-                            // 若连续运动（点动）速度归 0 且无新指令，回到静止就绪 Standstill
-                            if (Math.Abs(ctx.Velocity) < 0.0001)
+                            lock (_lock)
                             {
-                                ctx.State = AxisState.Standstill;
+                                if (_axes.TryGetValue(axisId, out var faultCtx) && !faultCtx.ReadFaultReported)
+                                {
+                                    faultCtx.ReadFaultReported = true;
+                                    faultCtx.State = AxisState.ErrorStop;
+                                }
                             }
+
+                            try
+                            {
+                                AxisFault?.Invoke(new AxisFaultArgs(axisId, "AXIS_READ_FAILED", ex.Message));
+                            }
+                            catch { }
                         }
                     }
 
-                    snapshots = _axes.Values.Select(ctx => new AxisSnapshot(
-                        ctx.Definition.AxisId,
-                        ctx.Position,
-                        ctx.Velocity,
-                        ctx.Enabled,
-                        ctx.Homed,
-                        ctx.State
-                    )).ToList();
-                }
+                    List<AxisSnapshot> snapshots;
+                    lock (_lock)
+                    {
+                        foreach (var reading in readings)
+                        {
+                            if (!_axes.TryGetValue(reading.Key, out var ctx)) continue;
 
-                try
+                            ctx.Position = reading.Value.position;
+                            ctx.Velocity = reading.Value.velocity;
+                            ctx.Enabled = reading.Value.enabled;
+                            ctx.Homed = reading.Value.homed;
+
+                            bool invalidReading = double.IsNaN(ctx.Position) || double.IsInfinity(ctx.Position) ||
+                                                   double.IsNaN(ctx.Velocity) || double.IsInfinity(ctx.Velocity);
+                            if (invalidReading)
+                            {
+                                ctx.State = AxisState.ErrorStop;
+                                continue;
+                            }
+
+                            if (!ctx.Enabled)
+                            {
+                                ctx.State = AxisState.Disabled;
+                                ctx.CommandInFlight = false;
+                            }
+                            else if (ctx.State == AxisState.Disabled)
+                            {
+                                ctx.State = AxisState.Standstill;
+                            }
+                            else if ((ctx.State == AxisState.ContinuousMotion || ctx.State == AxisState.Jogging ||
+                                      ctx.State == AxisState.DiscreteMotion || ctx.State == AxisState.Moving ||
+                                      ctx.State == AxisState.Homing) &&
+                                     Math.Abs(ctx.Velocity) < 0.0001 && !ctx.CommandInFlight)
+                            {
+                                ctx.State = AxisState.Standstill;
+                            }
+                            else if (ctx.State == AxisState.Stopping && Math.Abs(ctx.Velocity) < 0.0001)
+                            {
+                                ctx.State = AxisState.Standstill;
+                                ctx.StopRequestedTick = 0;
+                            }
+                            else if (ctx.State == AxisState.Stopping &&
+                                     ctx.StopRequestedTick > 0 &&
+                                     Environment.TickCount64 - ctx.StopRequestedTick > 5000)
+                            {
+                                ctx.State = AxisState.ErrorStop;
+                                ctx.StopRequestedTick = 0;
+                            }
+                        }
+
+                        snapshots = _axes.Values.Select(ctx => new AxisSnapshot(
+                            ctx.Definition.AxisId,
+                            ctx.Position,
+                            ctx.Velocity,
+                            ctx.Enabled,
+                            ctx.Homed,
+                            ctx.State
+                        )).ToList();
+                    }
+
+                    try
+                    {
+                        SnapshotsUpdated?.Invoke(snapshots);
+                    }
+                    catch { }
+                }
+                catch (Exception ex)
                 {
-                    SnapshotsUpdated?.Invoke(snapshots);
+                    try
+                    {
+                        AxisFault?.Invoke(new AxisFaultArgs(-1, "AXIS_REFRESH_FAILED", ex.Message));
+                    }
+                    catch { }
                 }
-                catch { }
 
-                Thread.Sleep(_refreshIntervalMs);
+                if (_cts.Token.WaitHandle.WaitOne(_refreshIntervalMs)) break;
             }
         }
 

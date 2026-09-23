@@ -99,7 +99,7 @@ namespace Sophon.Core.Flow.V2
         /// </summary>
         internal static string DescribeCompletionStatus(AxisDoneArgs doneArgs) => doneArgs.Status switch
         {
-            CommandCompletionStatus.Done => $"命令被中止 (CommandAborted): {doneArgs.Reason}",
+            CommandCompletionStatus.Done => $"命令已完成 (Done): {doneArgs.Reason}",
             CommandCompletionStatus.CommandAborted => $"命令被中止 (CommandAborted): {doneArgs.Reason}",
             CommandCompletionStatus.Error => $"硬件故障/限位错误 (Error): {doneArgs.Reason}",
             _ => $"未知完成状态 ({doneArgs.Status}): {doneArgs.Reason}"

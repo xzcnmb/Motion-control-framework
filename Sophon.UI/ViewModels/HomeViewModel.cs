@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using Common;
 using HandyControl.Controls;
 using Prism.Commands;
 using Prism.Events;
@@ -19,6 +21,7 @@ namespace Sophon.UI.ViewModels
         private readonly AlarmCenter? _alarmCenter;
         private readonly INavigationGuardService? _guardService;
         private readonly IUserContext? _userContext;
+        private readonly ILoggerFactory? _loggerFactory;
         private bool _isSubscribed;
 
         public DelegateCommand<string> NavigateCommand { get; }
@@ -43,12 +46,21 @@ namespace Sophon.UI.ViewModels
             _ => "访客"
         };
 
-        public string DriverKindName => _motionController?.Kind switch
+        public string DriverKindName
         {
-            DriverKind.GoogolGts => "固高 GTS 运动控制卡",
-            DriverKind.LeadShineDmc => "雷赛 DMC 运动控制卡",
-            _ => "未连接控制卡"
-        };
+            get
+            {
+                if (_motionController == null)
+                {
+                    return "未连接控制卡";
+                }
+
+                string kindText = MotionCardCatalog.Display(_motionController.Kind);
+                return MotionCardCatalog.IsImplemented(_motionController.Kind)
+                    ? kindText
+                    : kindText + "（未接入）";
+            }
+        }
 
         public string ConnectionStatusText => _motionController?.State switch
         {
@@ -74,6 +86,7 @@ namespace Sophon.UI.ViewModels
             AlarmCenter? alarmCenter = null,
             INavigationGuardService? guardService = null,
             IUserContext? userContext = null,
+            ILoggerFactory? loggerFactory = null,
             IEventAggregator? eventAggregator = null)
         {
             _motionController = motionController;
@@ -81,6 +94,7 @@ namespace Sophon.UI.ViewModels
             _alarmCenter = alarmCenter;
             _guardService = guardService;
             _userContext = userContext;
+            _loggerFactory = loggerFactory;
             NavigateCommand = new DelegateCommand<string>(ExecuteNavigate);
             eventAggregator?.GetEvent<UserChangeEvent>().Subscribe(_ => RefreshWelcome(), ThreadOption.UIThread, true);
             Subscribe();
@@ -133,7 +147,39 @@ namespace Sophon.UI.ViewModels
                 Growl.Warning(reason);
                 return;
             }
-            _regionManager?.RequestNavigate("ContentRegion", viewName);
+            _regionManager?.RequestNavigate("ContentRegion", viewName, result =>
+            {
+                if (!result.Success)
+                {
+                    // 只弹 Message 会丢掉 inner exception / stack；Growl 文案取最深 InnerException 的 Message，
+                    // 完整异常写日志（_loggerFactory 缺失时退回 Debug 输出），不静默、不吞。
+                    string logDetail = result.Exception?.ToString() ?? "导航结果未携带 Exception";
+                    string logMessage = $"导航到 {viewName} 失败：{logDetail}";
+                    _loggerFactory?.CreateLogger("HomeViewModel").Error(logMessage);
+                    System.Diagnostics.Debug.WriteLine($"[HomeViewModel] {logMessage}");
+
+                    Growl.Error($"无法打开页面 {viewName}：{DescribeNavigationError(result.Exception)}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// 取异常链最深处的 Message 作为用户可见文案；无异常时保持原「未知原因」口径。
+        /// </summary>
+        private static string DescribeNavigationError(Exception? ex)
+        {
+            if (ex == null)
+            {
+                return "未知原因";
+            }
+
+            Exception deepest = ex;
+            while (deepest.InnerException != null)
+            {
+                deepest = deepest.InnerException;
+            }
+
+            return deepest.Message;
         }
     }
 }

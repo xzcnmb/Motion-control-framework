@@ -6,48 +6,75 @@
     prism:ViewModelLocator.AutoWireViewModel="True"
     Background="#F4F6F9">
 
-    <Grid Margin="32">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" CornerRadius="12" Padding="36,32" Margin="0,0,0,24">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Offset="0" Color="#002766" />
-                    <GradientStop Offset="1" Color="#0958D9" />
-                </LinearGradientBrush>
-            </Border.Background>
-            <StackPanel>
-                <TextBlock Text="{Binding CurrentOperatorText}" FontSize="13" Foreground="#BAE0FF" Margin="0,0,0,8" />
-                <TextBlock Text="{Binding WelcomeTitle}" FontSize="32" FontWeight="Bold" Foreground="White" />
-                <TextBlock Text="{Binding WelcomeSubtitle}" FontSize="15" Foreground="#D6E4FF" Margin="0,10,0,0" TextWrapping="Wrap" />
+            <StackPanel Grid.Row="0" Margin="0,0,0,18">
+                <TextBlock Text="设备运行总览" FontSize="24" FontWeight="SemiBold" Foreground="#1F2937" />
+                <TextBlock Text="{Binding CurrentOperatorText}" FontSize="13" Foreground="#64748B" Margin="0,5,0,0" />
             </StackPanel>
-        </Border>
 
-        <StackPanel Grid.Row="1">
-            <TextBlock Text="常用入口" FontSize="16" FontWeight="SemiBold" Foreground="#262626" Margin="0,0,0,12" />
-            <WrapPanel>
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="轴调试"
-                        Command="{Binding NavigateCommand}" CommandParameter="AxisDebugView" />
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="点位示教"
-                        Command="{Binding NavigateCommand}" CommandParameter="TeachView" />
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="流程编辑"
-                        Command="{Binding NavigateCommand}" CommandParameter="FlowEditorView" />
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="控制卡配置"
-                        Command="{Binding NavigateCommand}" CommandParameter="MotionCardConfigView" />
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="相机配置"
-                        Command="{Binding NavigateCommand}" CommandParameter="CameraConfigView" />
-                <Button Width="180" Height="44" Margin="0,0,12,12" Content="工站运行"
-                        Command="{Binding NavigateCommand}" CommandParameter="StationView" />
-            </WrapPanel>
-            <TextBlock Margin="0,16,0,0" FontSize="13" Foreground="#8C8C8C"
-                       Text="{Binding DriverKindName, StringFormat='当前驱动：{0}'}" />
-            <TextBlock Margin="0,6,0,0" FontSize="13" Foreground="#8C8C8C"
-                       Text="{Binding ConnectionStatusText}" />
-            <TextBlock Margin="0,6,0,0" FontSize="13" Foreground="#8C8C8C"
-                       Text="{Binding AlarmSummaryText}" />
-        </StackPanel>
-    </Grid>
+            <UniformGrid Grid.Row="1" Columns="4" Margin="0,0,0,18">
+                <Border Background="White" BorderBrush="#D9E1E8" BorderThickness="1" Padding="14" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="控制器" FontSize="12" Foreground="#64748B" />
+                        <TextBlock Text="{Binding ConnectionStatusText}" FontSize="17" FontWeight="SemiBold" Foreground="#1F2937" Margin="0,6,0,0" />
+                        <TextBlock Text="{Binding DriverKindName}" FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Background="White" BorderBrush="#D9E1E8" BorderThickness="1" Padding="14" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="活动报警" FontSize="12" Foreground="#64748B" />
+                        <TextBlock Text="{Binding AlarmSummaryText}" FontSize="17" FontWeight="SemiBold" Foreground="#1F2937" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Background="White" BorderBrush="#D9E1E8" BorderThickness="1" Padding="14" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="操作权限" FontSize="12" Foreground="#64748B" />
+                        <TextBlock Text="{Binding CurrentOperatorText}" FontSize="17" FontWeight="SemiBold" Foreground="#1F2937" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="页面权限按角色限制" FontSize="11" Foreground="#64748B" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Background="#FFF7E6" BorderBrush="#FFD591" BorderThickness="1" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="现场状态" FontSize="12" Foreground="#8C5A00" />
+                        <TextBlock Text="{Binding WelcomeSubtitle}" FontSize="14" FontWeight="SemiBold" Foreground="#8C5A00" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="280" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="运行监视" FontSize="16" FontWeight="SemiBold" Foreground="#1F2937" Margin="0,0,0,10" />
+                    <WrapPanel>
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="工站运行" Command="{Binding NavigateCommand}" CommandParameter="StationView" Style="{StaticResource ButtonPrimary}" />
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="实时报警" Command="{Binding NavigateCommand}" CommandParameter="AlarmCenterView" Style="{StaticResource ButtonDefault}" />
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="限位监控" Command="{Binding NavigateCommand}" CommandParameter="LimitMonitorView" Style="{StaticResource ButtonDefault}" />
+                    </WrapPanel>
+                    <TextBlock Text="工程维护" FontSize="16" FontWeight="SemiBold" Foreground="#1F2937" Margin="0,16,0,10" />
+                    <WrapPanel>
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="轴调试" Command="{Binding NavigateCommand}" CommandParameter="AxisDebugView" Style="{StaticResource ButtonDefault}" />
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="点位示教" Command="{Binding NavigateCommand}" CommandParameter="TeachView" Style="{StaticResource ButtonDefault}" />
+                        <Button Width="170" Height="44" Margin="0,0,10,10" Content="流程编辑" Command="{Binding NavigateCommand}" CommandParameter="FlowEditorView" Style="{StaticResource ButtonDefault}" />
+                    </WrapPanel>
+                </StackPanel>
+                <Border Grid.Column="1" Background="White" BorderBrush="#D9E1E8" BorderThickness="1" Padding="16" Margin="18,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="操作提示" FontSize="15" FontWeight="SemiBold" Foreground="#1F2937" />
+                        <TextBlock Text="主页只用于观察和导航。轴点动、示教、流程启动等动作会在对应页面按权限和设备状态校验。" FontSize="12" Foreground="#64748B" Margin="0,10,0,0" TextWrapping="Wrap" />
+                        <Button Content="打开板卡配置（选型 → 轴参数）" Command="{Binding NavigateCommand}" CommandParameter="MotionCardConfigView" Style="{StaticResource ButtonDefault}" Height="36" Margin="0,18,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
 </UserControl>

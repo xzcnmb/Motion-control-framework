@@ -51,7 +51,7 @@ namespace Sophon.Infrastructure.Motion.Drivers.Native
         public static extern short GT_Stop(int mask, int option);
 
         [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        public static extern short GT_GetSts(short axis, out int pSts, short count = 1, uint pClock = 0);
+        public static extern short GT_GetSts(short axis, out int pSts, short count = 1, IntPtr pClock = default);
 
         [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
         public static extern short GT_LmtsOn(short axis, short limitType);

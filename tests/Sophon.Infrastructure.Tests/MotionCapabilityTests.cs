@@ -209,6 +209,8 @@ namespace Sophon.Infrastructure.Tests
             var profile = new MotionCardProfile
             {
                 Driver = DriverKind.LeadShineDmc,
+                // 非仿真驱动必须写目录内的型号（校验器不再按 Driver 猜型号）
+                CardModel = "DMC5810",
                 Platform = new PlatformOptions
                 {
                     SupportsBufferedSegments = true,
@@ -282,6 +284,7 @@ namespace Sophon.Infrastructure.Tests
             var pGts = new MotionCardProfile
             {
                 Driver = DriverKind.GoogolGts,
+                CardModel = "GTS-400",
                 Platform = platform,
                 ConfigFilePath = null,
                 Axes = new List<AxisDefinition> { MakeAxis(0) }

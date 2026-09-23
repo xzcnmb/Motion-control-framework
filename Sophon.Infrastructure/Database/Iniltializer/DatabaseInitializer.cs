@@ -74,13 +74,13 @@ namespace Sophon.Infrastructure
                 var user = new User
                 {
                     UserName = userName,
-                    Password = password,
+                    Password = PasswordHasher.Hash(password),
                     UserLevel = level,
                     CreateTime = DateTime.Now,
                     LatestChangeTime = DateTime.Now,
                 };
                 _dbContext.Db.Insertable(user).ExecuteCommand();
-                _dbContext._logger.Info($"[DatabaseInitializer] 已自动播种预置默认用户: {userName} (权限: {level}, 默认密码: {password})");
+                _dbContext._logger.Info($"[DatabaseInitializer] 已自动播种预置用户: {userName} (权限: {level})");
             }
         }
     }

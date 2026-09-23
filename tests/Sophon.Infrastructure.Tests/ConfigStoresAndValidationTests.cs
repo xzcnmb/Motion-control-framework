@@ -1,10 +1,17 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using Common;
+using Newtonsoft.Json;
+using Prism.Events;
+using Sophon.Application;
 using Sophon.Contracts;
+using Sophon.Core;
 using Sophon.Infrastructure.Config;
+using Sophon.Infrastructure.Motion.Drivers;
 using Xunit;
 
 namespace Sophon.Infrastructure.Tests
@@ -47,6 +54,8 @@ namespace Sophon.Infrastructure.Tests
             var seeds = MotionCardProfileStore.SeedDefaults();
             Assert.Single(seeds);
             Assert.Equal(4, seeds[0].Axes.Count);
+            Assert.Equal(DriverKind.Simulated, seeds[0].Driver);
+            Assert.True(string.IsNullOrWhiteSpace(seeds[0].CardModel));
 
             seeds.Add(new MotionCardProfile
             {
@@ -67,7 +76,8 @@ namespace Sophon.Infrastructure.Tests
             var loaded = store.Load();
             Assert.Equal(2, loaded.Count);
             Assert.Equal("默认配置", loaded[0].ProfileName);
-            Assert.Equal(DriverKind.GoogolGts, loaded[0].Driver);
+            Assert.Equal(DriverKind.Simulated, loaded[0].Driver);
+            Assert.True(string.IsNullOrWhiteSpace(loaded[0].CardModel));
             Assert.Equal(4, loaded[0].Axes.Count);
             Assert.Equal("Profile2", loaded[1].ProfileName);
             Assert.Equal(DriverKind.LeadShineDmc, loaded[1].Driver);
@@ -340,6 +350,490 @@ namespace Sophon.Infrastructure.Tests
             // Guard against division by zero
             Assert.Equal(0.0, PlatformParamMapper.ToAccelParam(500, 0, pLead));
             Assert.Equal(0.0, PlatformParamMapper.ToAccelParam(500, -10, pLead));
+        }
+
+        [Fact]
+        public void MotionCardCatalog_SeparatesPulseAndBus_And_DoesNotMixLeadShineApis()
+        {
+            var pulse = MotionCardCatalog.Find("DMC5810");
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            Assert.NotNull(pulse);
+            Assert.NotNull(bus);
+            Assert.Equal(MotionVendor.LeadShine, pulse!.Vendor);
+            Assert.Equal(MotionVendor.LeadShine, bus!.Vendor);
+            Assert.Equal(MotionCommandInterface.Pulse, pulse.CommandInterface);
+            Assert.Equal(MotionCommandInterface.EtherCAT, bus.CommandInterface);
+            Assert.Equal(DriverKind.LeadShineDmc, pulse.Driver);
+            Assert.Equal(DriverKind.LeadShineEtherCAT, bus.Driver);
+            Assert.Equal(AccelParamKind.AccelerationTime, pulse.Accel);
+            Assert.Equal(AccelParamKind.AccelerationValue, bus.Accel);
+            Assert.True(pulse.IsImplemented);
+            Assert.False(bus.IsImplemented);
+            Assert.Equal("LTDMC.dll", pulse.NativeLibrary);
+            Assert.DoesNotContain("LTDMC.dll", bus.NativeLibrary, StringComparison.OrdinalIgnoreCase);
+
+            var gts = MotionCardCatalog.Find("GTS-400");
+            var gen = MotionCardCatalog.Find("GEN-1000-16");
+            Assert.NotNull(gts);
+            Assert.NotNull(gen);
+            Assert.Equal(DriverKind.GoogolGts, gts!.Driver);
+            Assert.Equal(DriverKind.GoogolGen, gen!.Driver);
+            Assert.True(gts.RequiresConfigFile);
+            Assert.False(gen.RequiresConfigFile);
+        }
+
+        [Fact]
+        public void MotionProfileValidator_RejectsEtherCATCard_And_AxisCountOverModelLimit()
+        {
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            Assert.NotNull(bus);
+            var pBus = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            pBus.ApplyModel(bus!);
+            var errsBus = MotionProfileValidator.Validate(pBus);
+            Assert.Contains(errsBus, e => e.Contains("EtherCAT") && e.Contains("脉冲卡"));
+
+            var pulse = MotionCardCatalog.Find("DMC1020");
+            Assert.NotNull(pulse);
+            var pTooMany = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 },
+                    new() { AxisId = 1, Name = "Y", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 },
+                    new() { AxisId = 2, Name = "Z", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            pTooMany.ApplyModel(pulse!);
+            var errsCount = MotionProfileValidator.Validate(pTooMany);
+            Assert.Contains(errsCount, e => e.Contains("最多 2 轴"));
+        }
+
+        [Fact]
+        public void DefaultPlatformFor_UsesCatalogModel_NotBrandAlone()
+        {
+            var dmcPulse = MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineDmc, "DMC5810");
+            var dmcBus = MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineEtherCAT, "DMC-E5032");
+            Assert.Equal(AccelParamKind.AccelerationTime, dmcPulse.Accel);
+            Assert.False(dmcPulse.UsesConnectionString);
+            Assert.Equal(AccelParamKind.AccelerationValue, dmcBus.Accel);
+
+            var gts = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts, "GTS-400");
+            var gen = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGen, "GEN-1000-16");
+            Assert.True(gts.RequiresConfigFile);
+            Assert.False(gen.RequiresConfigFile);
+        }
+
+        [Fact]
+        public void MotionCardProfileStore_NormalizesLegacyProfiles_WithoutCardModel()
+        {
+            // 旧档案只写了 Driver + CardModel（没有 Vendor / CommandInterface / Series / Platform）
+            string filePath = Path.Combine(_tempDirectory, "legacy_motion_card_profiles.json");
+            string legacyJson = @"[{
+                ""profileName"": ""旧雷赛档案"",
+                ""driver"": ""LeadShineDmc"",
+                ""cardModel"": ""DMC5800"",
+                ""cardNo"": 0,
+                ""axes"": []
+            }]";
+            File.WriteAllText(filePath, legacyJson);
+
+            var store = new MotionCardProfileStore(filePath);
+            var loaded = store.Load();
+            var legacy = Assert.Single(loaded);
+            Assert.Equal(DriverKind.LeadShineDmc, legacy.Driver);
+            Assert.Equal(MotionVendor.LeadShine, legacy.Vendor);
+            Assert.Equal(MotionCommandInterface.Pulse, legacy.CommandInterface);
+            Assert.Equal("DMC5000", legacy.Series);
+            Assert.Equal(AccelParamKind.AccelerationTime, legacy.Platform.Accel);
+            Assert.Equal(1, legacy.Platform.AxisIndexBase);
+
+            // 拒绝未接入的总线型号，且不会把它当成雷赛脉冲卡打开
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            Assert.NotNull(bus);
+            var pBus = new MotionCardProfile();
+            pBus.ApplyModel(bus!);
+            Assert.Contains(
+                MotionProfileValidator.Validate(pBus),
+                e => e.Contains("尚未接入"));
+        }
+
+        [Fact]
+        public void MotionCardProfileStore_SeedDefaults_IsSimulated_And_RunsOffline()
+        {
+            var seeds = MotionCardProfileStore.SeedDefaults();
+            var sim = Assert.Single(seeds);
+
+            // 默认种子按仓库约定可离线运行：不绑真实型号、不需要 cfg / 连接字符串
+            Assert.Equal("默认配置", sim.ProfileName);
+            Assert.Equal(DriverKind.Simulated, sim.Driver);
+            Assert.Equal(MotionVendor.Simulated, sim.Vendor);
+            Assert.True(string.IsNullOrWhiteSpace(sim.CardModel));
+            Assert.False(sim.Platform.RequiresConfigFile);
+            Assert.False(sim.Platform.UsesConnectionString);
+            Assert.Empty(MotionProfileValidator.Validate(sim));
+
+            // 四轴默认参数的测试价值保持：X/Y/Z/R 一根都不能少
+            Assert.Equal(new[] { "X", "Y", "Z", "R" }, sim.Axes.Select(a => a.Name).ToArray());
+            Assert.All(sim.Axes, a => Assert.True(a.PulsePerUnit > 0 && a.MaxSpeed > 0));
+
+            // 默认种子能真的造出控制器：离线 Sim 链路不加载任何厂商 DLL
+            using var controller = MotionControllerFactory.Create(sim.Driver, sim.Axes, allowSimFallback: false);
+            Assert.Equal(DriverKind.Simulated, controller.Kind);
+            Assert.Equal(4, controller.Axes.Count);
+        }
+
+        [Fact]
+        public void MotionCardCatalog_SimulatedVendor_IsSelectable_WithoutRealCardModel()
+        {
+            // 厂商第一级可以直接选到「仿真控制器（无板卡）」
+            Assert.Contains(MotionVendor.Simulated, MotionCardCatalog.Vendors);
+            Assert.Contains("仿真控制器", MotionCardCatalog.Display(MotionVendor.Simulated));
+
+            // 仿真没有真实型号 / SDK：后三级级联为空，也不会冒充成任何真实脉冲卡
+            Assert.Empty(MotionCardCatalog.InterfacesFor(MotionVendor.Simulated));
+            Assert.Empty(MotionCardCatalog.SeriesFor(MotionVendor.Simulated, MotionCommandInterface.Pulse));
+            Assert.Empty(MotionCardCatalog.ModelsFor(MotionVendor.Simulated, MotionCommandInterface.Pulse, string.Empty));
+            Assert.DoesNotContain(MotionCardCatalog.Models, m => m.Driver == DriverKind.Simulated);
+
+            // 纯仿真档案不写型号也能通过校验
+            var sim = new MotionCardProfile { Driver = DriverKind.Simulated };
+            Assert.Null(MotionCardCatalog.Resolve(sim));
+            Assert.Empty(MotionProfileValidator.Validate(sim));
+        }
+
+        [Fact]
+        public void MotionCardProfileStore_DoesNotRewriteUnknownModelToFirstModelOfDriver()
+        {
+            // CardModel 非空但不在目录：禁止按 Driver 静默套用该驱动第一个型号
+            var legacy = new MotionCardProfile
+            {
+                ProfileName = "未知型号档案",
+                Driver = DriverKind.GoogolGts,
+                Vendor = MotionVendor.Googol,
+                CommandInterface = MotionCommandInterface.Pulse,
+                Series = "GTS",
+                CardModel = "GTS-9999",
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+
+            MotionCardProfileStore.Normalize(legacy);
+
+            Assert.Equal("GTS-9999", legacy.CardModel);
+            Assert.Equal(DriverKind.GoogolGts, legacy.Driver);
+            Assert.Equal("GTS", legacy.Series);
+            Assert.Null(MotionCardCatalog.Resolve(legacy));
+
+            // 由校验提示用户重新选择，而不是悄悄换成目录第一个型号
+            var errs = MotionProfileValidator.Validate(legacy);
+            Assert.Contains(errs, e => e.Contains("GTS-9999") && e.Contains("不在选型目录中"));
+        }
+
+        [Fact]
+        public void MotionCardProfileStore_NormalizesLegacyProfile_WithEmptyModel_ByDriver()
+        {
+            // CardModel 为空的旧档案仍允许按 Driver 反推目录型号
+            var legacy = new MotionCardProfile
+            {
+                ProfileName = "旧空型号档案",
+                Driver = DriverKind.LeadShineDmc
+            };
+
+            MotionCardProfileStore.Normalize(legacy);
+
+            Assert.False(string.IsNullOrWhiteSpace(legacy.CardModel));
+            Assert.NotNull(MotionCardCatalog.Find(legacy.CardModel));
+            Assert.Equal(MotionVendor.LeadShine, legacy.Vendor);
+            Assert.Equal(MotionCommandInterface.Pulse, legacy.CommandInterface);
+            Assert.Equal(AccelParamKind.AccelerationTime, legacy.Platform.Accel);
+            Assert.Equal(1, legacy.Platform.AxisIndexBase);
+        }
+
+        [Fact]
+        public void MotionCardCatalog_BusModels_DoNotClaimBufferedSegments()
+        {
+            // 总线（EtherCAT / gLink-II）目录项不得误报"卡内整段缓冲插补"
+            var busModels = MotionCardCatalog.Models
+                .Where(m => m.CommandInterface is MotionCommandInterface.EtherCAT or MotionCommandInterface.GLink)
+                .ToList();
+            Assert.NotEmpty(busModels);
+            Assert.All(busModels, m => Assert.False(m.SupportsBufferedSegments));
+
+            Assert.False(MotionCardCatalog.Find("DMC-E5032")!.SupportsBufferedSegments);
+            Assert.False(MotionCardCatalog.Find("GEN-1000-16")!.SupportsBufferedSegments);
+            Assert.False(MotionCardCatalog.Find("GE-004")!.SupportsBufferedSegments);
+
+            // 当前脉冲适配器保持 true
+            Assert.True(MotionCardCatalog.Find("GTS-400")!.SupportsBufferedSegments);
+            Assert.True(MotionCardCatalog.Find("DMC5810")!.SupportsBufferedSegments);
+
+            // 平台选项跟着型号走，总线型号不再把 SupportsBufferedSegments 带成 true
+            Assert.False(MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineEtherCAT, "DMC-E5032").SupportsBufferedSegments);
+            Assert.True(MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts, "GTS-400").SupportsBufferedSegments);
+        }
+
+        [Fact]
+        public void MotionProfileValidator_RequiresCatalogModel_ForNonSimulatedDrivers()
+        {
+            var axis = new AxisDefinition { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 };
+
+            // 非仿真驱动 + 空型号：必须按目录选型号，不允许按 Driver 猜一个
+            var pGts = new MotionCardProfile
+            {
+                Driver = DriverKind.GoogolGts,
+                Platform = MotionCardProfile.DefaultPlatformFor(DriverKind.GoogolGts),
+                ConfigFilePath = @"C:\NonExistentDirectory\gts.cfg",
+                Axes = new List<AxisDefinition> { axis }
+            };
+            Assert.Contains(MotionProfileValidator.Validate(pGts), e => e.Contains("未选择控制卡型号"));
+
+            // 总线驱动 + 空型号同样拒绝，且不会静默回退到脉冲卡 / Sim
+            var pBus = new MotionCardProfile
+            {
+                Driver = DriverKind.LeadShineEtherCAT,
+                Platform = MotionCardProfile.DefaultPlatformFor(DriverKind.LeadShineEtherCAT),
+                ConnectionString = "192.168.0.10",
+                Axes = new List<AxisDefinition> { axis }
+            };
+            var errsBus = MotionProfileValidator.Validate(pBus);
+            Assert.Contains(errsBus, e => e.Contains("未选择控制卡型号"));
+            Assert.Contains(errsBus, e => e.Contains("尚未接入"));
+
+            // 纯仿真 + 空型号放行（离线 Sim 链路）
+            var pSim = new MotionCardProfile { Driver = DriverKind.Simulated, Axes = new List<AxisDefinition> { axis } };
+            Assert.Empty(MotionProfileValidator.Validate(pSim));
+        }
+
+        [Fact]
+        public void AlarmRepository_Constructs_With_Empty_RegisteredAlarms_When_LoadConfig_Returns_Null()
+        {
+            // 复现报警注册页打不开的链路：文件不存在 / 空白 / JSON 内容为 null 时 LoadConfig 返回 null
+            var configManager = new FakeConfigManager();
+            configManager.Enqueue(null);
+            var repository = CreateAlarmRepository(configManager);
+
+            Assert.NotNull(repository.RegisteredAlarms);
+            Assert.Empty(repository.RegisteredAlarms);
+            Assert.NotNull(repository.ActualAlarmList);
+            Assert.Empty(repository.ActualAlarmList);
+            Assert.Equal(1, configManager.LoadCallCount);
+            Assert.Equal(0, configManager.SaveCallCount); // 只给空列表，不自动保存种子数据
+        }
+
+        [Fact]
+        public void AlarmRepository_Repeated_Restore_With_Null_Config_Does_Not_Throw()
+        {
+            var configManager = new FakeConfigManager();
+            var repository = CreateAlarmRepository(configManager);
+
+            Assert.Null(Record.Exception(() => repository.Restore()));
+            Assert.NotNull(repository.RegisteredAlarms);
+            Assert.Empty(repository.RegisteredAlarms);
+
+            Assert.Null(Record.Exception(() => repository.Restore()));
+            Assert.NotNull(repository.RegisteredAlarms);
+            Assert.Empty(repository.RegisteredAlarms);
+            Assert.Equal(3, configManager.LoadCallCount); // 构造 1 次 + 手动 2 次
+        }
+
+        [Fact]
+        public void AlarmRepository_Restore_Loads_Existing_Registered_Alarms_Completely()
+        {
+            var configManager = new FakeConfigManager();
+            configManager.Enqueue(new List<AlarmItem>
+            {
+                new AlarmItem { AlarmCode = "A001", Content = "X轴正向硬限位", Time = new DateTime(2026, 9, 23, 8, 30, 0) },
+                new AlarmItem { AlarmCode = "B002", Content = "气压低报警" }
+            });
+            var repository = CreateAlarmRepository(configManager);
+
+            Assert.Equal(2, repository.RegisteredAlarms.Count);
+            Assert.Equal("A001", repository.RegisteredAlarms[0].AlarmCode);
+            Assert.Equal("X轴正向硬限位", repository.RegisteredAlarms[0].Content);
+            Assert.Equal(new DateTime(2026, 9, 23, 8, 30, 0), repository.RegisteredAlarms[0].Time);
+            Assert.Equal("B002", repository.RegisteredAlarms[1].AlarmCode);
+            Assert.Equal("气压低报警", repository.RegisteredAlarms[1].Content);
+        }
+
+        [Fact]
+        public void AlarmRepository_Restore_Does_Not_Swallow_Deserialize_Exception_And_Keeps_Previous_Collection()
+        {
+            var configManager = new FakeConfigManager();
+            configManager.Enqueue(new List<AlarmItem> { new AlarmItem { AlarmCode = "A001", Content = "X轴正向硬限位" } });
+            configManager.Enqueue(new JsonException("配置文件损坏"));
+            var repository = CreateAlarmRepository(configManager);
+
+            var loaded = repository.RegisteredAlarms;
+            Assert.Single(loaded);
+
+            var exception = Assert.Throws<JsonException>(() => repository.Restore());
+            Assert.Contains("配置文件损坏", exception.Message);
+            Assert.Same(loaded, repository.RegisteredAlarms); // 已有有效集合不被替换
+            Assert.Single(repository.RegisteredAlarms);
+            Assert.Equal("A001", repository.RegisteredAlarms[0].AlarmCode);
+        }
+
+        [Fact]
+        public void ConfigManager_LoadConfig_Returns_Null_For_Missing_Blank_And_JsonNull()
+        {
+            var serializer = new JsonConfigSerializer();
+
+            // 文件不存在
+            string missingPath = Path.Combine(_tempDirectory, "missing", "alarm_config.json");
+            Assert.False(File.Exists(missingPath));
+            Assert.Null(new ConfigManager(serializer, missingPath).LoadConfig<List<AlarmItem>>());
+
+            // 空白文件
+            string blankPath = Path.Combine(_tempDirectory, "blank", "alarm_config.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(blankPath)!);
+            File.WriteAllText(blankPath, "   \r\n\t");
+            Assert.Null(new ConfigManager(serializer, blankPath).LoadConfig<List<AlarmItem>>());
+
+            // JSON 内容为 null
+            string jsonNullPath = Path.Combine(_tempDirectory, "jsonnull", "alarm_config.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(jsonNullPath)!);
+            File.WriteAllText(jsonNullPath, "null");
+            Assert.Null(new ConfigManager(serializer, jsonNullPath).LoadConfig<List<AlarmItem>>());
+        }
+
+        [Fact]
+        public void AlarmRepository_Restore_Through_RealConfigManager_Missing_Blank_NullJson_And_WithData()
+        {
+            var serializer = new JsonConfigSerializer();
+
+            // 文件不存在
+            string missingPath = Path.Combine(_tempDirectory, "missing", "alarm_config.json");
+            Assert.Empty(CreateAlarmRepository(new ConfigManager(serializer, missingPath)).RegisteredAlarms);
+
+            // 空白文件
+            string blankPath = Path.Combine(_tempDirectory, "blank", "alarm_config.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(blankPath)!);
+            File.WriteAllText(blankPath, "   \r\n\t");
+            Assert.Empty(CreateAlarmRepository(new ConfigManager(serializer, blankPath)).RegisteredAlarms);
+
+            // JSON 内容为 null
+            string jsonNullPath = Path.Combine(_tempDirectory, "jsonnull", "alarm_config.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(jsonNullPath)!);
+            File.WriteAllText(jsonNullPath, "null");
+            Assert.Empty(CreateAlarmRepository(new ConfigManager(serializer, jsonNullPath)).RegisteredAlarms);
+
+            // 有数据时按原样完整加载
+            string dataPath = Path.Combine(_tempDirectory, "withdata", "alarm_config.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(dataPath)!);
+            File.WriteAllText(dataPath, serializer.Serialize(new List<AlarmItem>
+            {
+                new AlarmItem { AlarmCode = "A001", Content = "X轴正向硬限位" },
+                new AlarmItem { AlarmCode = "B002", Content = "气压低报警" }
+            }));
+
+            var repository = CreateAlarmRepository(new ConfigManager(serializer, dataPath));
+            Assert.Equal(2, repository.RegisteredAlarms.Count);
+            Assert.Equal("A001", repository.RegisteredAlarms[0].AlarmCode);
+            Assert.Equal("X轴正向硬限位", repository.RegisteredAlarms[0].Content);
+            Assert.Equal("B002", repository.RegisteredAlarms[1].AlarmCode);
+            Assert.Equal("气压低报警", repository.RegisteredAlarms[1].Content);
+        }
+
+        private static AlarmRepository CreateAlarmRepository(IConfigManager configManager)
+        {
+            return new AlarmRepository(
+                new FixedConfigManagerFactory(configManager),
+                new EventAggregator(),
+                new TestLoggerFactory());
+        }
+
+        private sealed class FakeConfigManager : IConfigManager
+        {
+            private readonly Queue<object?> _loadResults = new Queue<object?>();
+
+            public int LoadCallCount { get; private set; }
+
+            public int SaveCallCount { get; private set; }
+
+            public void Enqueue(object? result)
+            {
+                _loadResults.Enqueue(result);
+            }
+
+            public T LoadConfig<T>()
+            {
+                LoadCallCount++;
+                if (_loadResults.Count == 0)
+                {
+                    return default;
+                }
+
+                object? next = _loadResults.Dequeue();
+                if (next is Exception exception)
+                {
+                    throw exception;
+                }
+
+                return next is null ? default : (T)next;
+            }
+
+            public void SaveConfig<T>(T config)
+            {
+                SaveCallCount++;
+            }
+        }
+
+        private sealed class FixedConfigManagerFactory : IConfigManagerFactory
+        {
+            private readonly IConfigManager _configManager;
+
+            public FixedConfigManagerFactory(IConfigManager configManager)
+            {
+                _configManager = configManager;
+            }
+
+            public IConfigManager CreateConfigManager(ConfigType type, string filename, string secondPath = "")
+            {
+                return _configManager;
+            }
+        }
+
+        private sealed class TestLoggerFactory : ILoggerFactory
+        {
+            public ILoggerManager CreateLogger(string loggername)
+            {
+                return new TestLoggerManager();
+            }
+        }
+
+        private sealed class TestLoggerManager : ILoggerManager
+        {
+            public void Trace(string msg)
+            {
+            }
+
+            public void Debug(string msg)
+            {
+            }
+
+            public void Info(string msg)
+            {
+            }
+
+            public void Warn(string msg)
+            {
+            }
+
+            public void Error(string msg)
+            {
+            }
+
+            public void Fatal(string msg)
+            {
+            }
         }
     }
 }

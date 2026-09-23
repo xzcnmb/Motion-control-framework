@@ -53,11 +53,15 @@
         </Setter>
     </Style>
 
-    <!-- 侧边栏菜单样式增强 -->
-    <Style x:Key="ShellSideMenuItemStyle" BasedOn="{StaticResource SideMenuItemBaseStyle}" TargetType="hc:SideMenuItem">
-        <Setter Property="Height" Value="46" />
-        <Setter Property="FontSize" Value="15" />
-        <Setter Property="Cursor" Value="Hand" />
+    <!-- 侧边栏一级菜单项容器（挂在 hc:SideMenu.ItemContainerStyle 上），只改高度，不动容器链。
+         严禁在这里再给 ItemContainerStyle 挂二级样式：HandyControl 的 SideMenuItem.Refresh()
+         会读取本容器样式并覆写每个子项的 Style，含子项的一级项取到 {DependencyProperty.UnsetValue}，
+         主窗口首次 Measure 即抛 InvalidOperationException「{DependencyProperty.UnsetValue} 不是 ItemContainerStyle 的有效值」。
+         二级项沿用 BasedOn 链上 SideMenuItemHeaderBaseStyle 自带的 ItemContainerStyle（SideMenuItemBaseStyle）。
+         注意：hc:SideMenuItem 没有 HeaderTemplate 依赖属性，不要设置（会报 MC4005）；字体统一后续再论。
+         严禁给带子项的容器设固定 Height：模板第二行是展开面板，写死高度会把子菜单裁掉；用 MinHeight。 -->
+    <Style x:Key="ShellSideMenuItemHeaderStyle" BasedOn="{StaticResource SideMenuItemHeaderBaseStyle}" TargetType="hc:SideMenuItem">
+        <Setter Property="MinHeight" Value="46" />
     </Style>
 
 </ResourceDictionary>

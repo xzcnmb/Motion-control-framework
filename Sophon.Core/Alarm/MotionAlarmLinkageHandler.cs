@@ -47,7 +47,8 @@ namespace Sophon.Core.Alarm
                     break;
 
                 case LinkageMode.StopAllAxes:
-                    _axisManager?.AbortAll();
+                    // StopAllAxes 是 Cat1 受控停；只有 EStopAll 才允许进入 AbortAll/ErrorStop。
+                    _axisManager?.StopAll();
                     break;
 
                 case LinkageMode.StopFlow:

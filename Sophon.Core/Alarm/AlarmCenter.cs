@@ -83,23 +83,28 @@ namespace Sophon.Core.Alarm
                 Source: source,
                 TriggerTime: DateTime.Now);
 
+            bool wasActive = _activeAlarms.ContainsKey(code);
             _activeAlarms[code] = active;
 
-            // 写入历史
-            lock (_historyLock)
+            // 同一报警保持激活时只更新活动记录，不重复制造历史和磁盘写入风暴。
+            if (!wasActive)
             {
-                _historyRecords.Add(new AlarmHistoryRecord
+                lock (_historyLock)
                 {
-                    Id = _historyRecords.Count + 1,
-                    Code = active.Code,
-                    Message = active.Message,
-                    Severity = active.Severity,
-                    LinkageMode = active.LinkageMode,
-                    Detail = active.Detail,
-                    Source = active.Source,
-                    TriggerTime = active.TriggerTime
-                });
-                SaveHistory();
+                    _historyRecords.Add(new AlarmHistoryRecord
+                    {
+                        Id = _historyRecords.Count == 0 ? 1 : _historyRecords.Max(r => r.Id) + 1,
+                        Code = active.Code,
+                        Message = active.Message,
+                        Severity = active.Severity,
+                        LinkageMode = active.LinkageMode,
+                        Detail = active.Detail,
+                        Source = active.Source,
+                        TriggerTime = active.TriggerTime
+                    });
+                    TrimHistoryLocked(5000);
+                    SaveHistory();
+                }
             }
 
             // 触发联动动作
@@ -189,6 +194,13 @@ namespace Sophon.Core.Alarm
             }
         }
 
+        private void TrimHistoryLocked(int maxRecords)
+        {
+            if (_historyRecords.Count <= maxRecords) return;
+            int removeCount = _historyRecords.Count - maxRecords;
+            _historyRecords.RemoveRange(0, removeCount);
+        }
+
         private void SaveHistory()
         {
             try
@@ -201,7 +213,7 @@ namespace Sophon.Core.Alarm
 
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string json = JsonSerializer.Serialize(_historyRecords, options);
-                File.WriteAllText(_historyFilePath, json);
+                global::Common.AtomicFileStore.WriteAllText(_historyFilePath, json);
             }
             catch { }
         }

@@ -106,13 +106,11 @@
                             <TextBlock Text="用户认证登录" FontSize="22" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,4" />
                             <TextBlock Text="请选择操作人员身份并输入密码以解锁工程页面" FontSize="12" Foreground="#6B7280" Margin="0,0,0,14" />
 
-                            <!-- 醒目的出厂默认密码与身份提示卡片 -->
-                            <Border Background="#F6FFED" BorderBrush="#B7EB8F" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
+                            <!-- 权限范围与安全提示，不在界面显示任何默认口令 -->
+                            <Border Background="#FFF7E6" BorderBrush="#FFD591" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
                                 <StackPanel>
-                                    <TextBlock Text="💡 出厂预置账户与密码提示 (默认口令: 123)" FontWeight="Bold" Foreground="#389E0D" FontSize="12" Margin="0,0,0,4" />
-                                    <TextBlock Text="• 管理员: 全权限 (含控制卡配置与底层工艺参数)" Foreground="#595959" FontSize="11" Margin="0,1" />
-                                    <TextBlock Text="• 工程师: 调试与示教 (轴调试/示教/流程/外设/标定/IO)" Foreground="#595959" FontSize="11" Margin="0,1" />
-                                    <TextBlock Text="• 操作员: 产线监视 (实时看板/视觉取景/报警监控)" Foreground="#595959" FontSize="11" Margin="0,1" />
+                                    <TextBlock Text="登录后按角色解锁对应工程页面" FontWeight="Bold" Foreground="#8C5A00" FontSize="12" Margin="0,0,0,4" />
+                                    <TextBlock Text="管理员：控制卡与核心参数；工程师：调试、示教、流程；操作员：运行监视与报警处理。首次登录后请立即修改密码。" Foreground="#595959" FontSize="11" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
 
@@ -137,7 +135,7 @@
                                 SelectedItem="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 hc:InfoElement.Placeholder="请选择操作用户名" />
 
-                            <TextBlock Text="操作密码 (默认: 123)" FontSize="12" FontWeight="Medium" Foreground="#4B5563" Margin="0,0,0,6" />
+                            <TextBlock Text="操作密码" FontSize="12" FontWeight="Medium" Foreground="#4B5563" Margin="0,0,0,6" />
                             <PasswordBox
                                 x:Name="TxtPassword"
                                 Height="38"

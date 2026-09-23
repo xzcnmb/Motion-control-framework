@@ -183,6 +183,13 @@ namespace Sophon.UI.ViewModels.Alarm
 
         private void OnClearAllAlarms()
         {
+            var result = MessageBox.Show(
+                "确认尝试复位全部当前报警？\n高等级报警仍需满足限位、驱动和安全回路条件。",
+                "确认报警复位",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
+
             var codes = ActiveAlarms.Select(a => a.Code).ToList();
             foreach (var code in codes)
             {
@@ -202,6 +209,13 @@ namespace Sophon.UI.ViewModels.Alarm
 
         private void OnClearHistory()
         {
+            var result = MessageBox.Show(
+                "确认清空全部报警历史？此操作不可撤销。",
+                "确认清空历史",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
+
             _alarmCenter.ClearHistory();
             HistoryRecords.Clear();
         }
