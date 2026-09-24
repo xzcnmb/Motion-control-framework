@@ -221,215 +221,215 @@ namespace Sophon.Contracts
             var list = new List<MotionCardModelDescriptor>();
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "GTS", "GTS 脉冲卡（PCI）", "GTS-400", "GTS-400（4 轴 PCI）", 4,
+                "GTS", "GTS 脉冲卡（PCI）", "GTS-400", "固高科技 GTS-400（4 轴 PCI 脉冲卡）", 4,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "固高经典 PCI 脉冲卡。轴号从 1 起，必须加载 cfg。未经真机验证。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "GTS", "GTS 脉冲卡（PCI）", "GTS-800", "GTS-800（8 轴 PCI）", 8,
+                "GTS", "GTS 脉冲卡（PCI）", "GTS-800", "固高科技 GTS-800（8 轴 PCI 脉冲卡）", 8,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "固高 8 轴 PCI 脉冲卡。未经真机验证。");
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "GTS-PV", "GTS-PV 脉冲卡（PCI）", "GTS-400-PV", "GTS-400-PV（4 轴）", 4,
+                "GTS-PV", "GTS-PV 脉冲卡（PCI）", "GTS-400-PV", "固高科技 GTS-400-PV（4 轴 PCI 脉冲卡）", 4,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "GTS-PV 系列，仍走 gts.dll。未经真机验证。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "GTS-PV", "GTS-PV 脉冲卡（PCI）", "GTS-800-PV", "GTS-800-PV（8 轴）", 8,
+                "GTS-PV", "GTS-PV 脉冲卡（PCI）", "GTS-800-PV", "固高科技 GTS-800-PV（8 轴 PCI 脉冲卡）", 8,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "GTS-PV 8 轴。未经真机验证。");
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-400-VB", "GTS-400-VB（4 轴 PCIe）", 4,
+                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-400-VB", "固高科技 GTS-400-VB（4 轴 PCIe 脉冲卡）", 4,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "PCIe 脉冲卡，与 PCI GTS 同属 gts.dll 家族，型号资源不同。未经真机验证。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-800-VB", "GTS-800-VB（8 轴 PCIe）", 8,
+                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-800-VB", "固高科技 GTS-800-VB（8 轴 PCIe 脉冲卡）", 8,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "PCIe 8 轴脉冲卡。未经真机验证。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-1600-VB", "GTS-1600-VB（16 轴 PCIe）", 16,
+                "GTS-VB", "GTS-VB 脉冲卡（PCIe）", "GTS-1600-VB", "固高科技 GTS-1600-VB（16 轴 PCIe 脉冲卡）", 16,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "PCIe 16 轴脉冲卡。未经真机验证。");
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.Analog, MotionHostLink.Pci,
-                "GTHD", "GTHD 模拟量伺服卡", "GTHD-400", "GTHD-400（4 轴模拟量）", 4,
+                "GTHD", "GTHD 模拟量伺服卡", "GTHD-400", "固高科技 GTHD-400（4 轴 PCI 模拟量伺服卡）", 4,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "模拟量输出，不是脉冲方向。接线与伺服参数与脉冲卡不同。未经真机验证。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.Analog, MotionHostLink.Pci,
-                "GTHD", "GTHD 模拟量伺服卡", "GTHD-800", "GTHD-800（8 轴模拟量）", 8,
+                "GTHD", "GTHD 模拟量伺服卡", "GTHD-800", "固高科技 GTHD-800（8 轴 PCI 模拟量伺服卡）", 8,
                 DriverKind.GoogolGts, GtsDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationValue, 1, true,
                 "8 轴模拟量。未经真机验证。");
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "GEN", "GEN EtherCAT 主站", "GEN-1000-08", "GEN-1000（8 轴 EtherCAT）", 8,
+                "GEN", "GEN EtherCAT 主站", "GEN-1000-08", "固高科技 GEN-1000-08（8 轴 PCIe EtherCAT 总线卡）", 8,
                 DriverKind.GoogolGen, GenSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "EtherCAT 主站，轴在从站驱动器上。不是 GTS 脉冲卡。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "GEN", "GEN EtherCAT 主站", "GEN-1000-16", "GEN-1000（16 轴 EtherCAT）", 16,
+                "GEN", "GEN EtherCAT 主站", "GEN-1000-16", "固高科技 GEN-1000-16（16 轴 PCIe EtherCAT 总线卡）", 16,
                 DriverKind.GoogolGen, GenSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "16 轴 EtherCAT 主站。未接入。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "GEN", "GEN EtherCAT 主站", "GEN-1000-32", "GEN-1000（32 轴 EtherCAT）", 32,
+                "GEN", "GEN EtherCAT 主站", "GEN-1000-32", "固高科技 GEN-1000-32（32 轴 PCIe EtherCAT 总线卡）", 32,
                 DriverKind.GoogolGen, GenSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "32 轴 EtherCAT 主站。未接入。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "GEN", "GEN EtherCAT 主站", "GEN-1000-64", "GEN-1000（64 轴 EtherCAT）", 64,
+                "GEN", "GEN EtherCAT 主站", "GEN-1000-64", "固高科技 GEN-1000-64（64 轴 PCIe EtherCAT 总线卡）", 64,
                 DriverKind.GoogolGen, GenSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "64 轴 EtherCAT 主站。未接入。");
 
             Add(list, MotionVendor.Googol, MotionCommandInterface.GLink, MotionHostLink.Pcie,
-                "GE", "GE gLink-II 主站", "GE-004", "GE-004（4 轴 gLink-II）", 4,
+                "GE", "GE gLink-II 主站", "GE-004", "固高科技 GE-004（4 轴 PCIe gLink-II 总线卡）", 4,
                 DriverKind.GoogolGe, GeSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "固高私有总线，不是 EtherCAT，也不是 GTS。");
             Add(list, MotionVendor.Googol, MotionCommandInterface.GLink, MotionHostLink.Pcie,
-                "GE", "GE gLink-II 主站", "GE-008", "GE-008（8 轴 gLink-II）", 8,
+                "GE", "GE gLink-II 主站", "GE-008", "固高科技 GE-008（8 轴 PCIe gLink-II 总线卡）", 8,
                 DriverKind.GoogolGe, GeSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "8 轴 gLink-II。未接入。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1020", "DMC1020（2 轴）", 2,
+                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1020", "雷赛智能 DMC1020（2 轴 PCI 脉冲卡）", 2,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "雷赛入门 PCI 脉冲卡。加减速是时间（Tacc/Tdec）。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1040", "DMC1040（4 轴）", 4,
+                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1040", "雷赛智能 DMC1040（4 轴 PCI 脉冲卡）", 4,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "4 轴 PCI 脉冲卡。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1080", "DMC1080（8 轴）", 8,
+                "DMC1000", "DMC1000 脉冲卡（PCI）", "DMC1080", "雷赛智能 DMC1080（8 轴 PCI 脉冲卡）", 8,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "8 轴 PCI 脉冲卡。未经真机验证。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3020", "DMC3020（2 轴）", 2,
+                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3020", "雷赛智能 DMC3020（2 轴 PCI 脉冲卡）", 2,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "DMC3000 系列 PCI 脉冲卡。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3040", "DMC3040（4 轴）", 4,
+                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3040", "雷赛智能 DMC3040（4 轴 PCI 脉冲卡）", 4,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "4 轴。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3080", "DMC3080（8 轴）", 8,
+                "DMC3000", "DMC3000 脉冲卡（PCI）", "DMC3080", "雷赛智能 DMC3080（8 轴 PCI 脉冲卡）", 8,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "8 轴。未经真机验证。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5410", "DMC5410（4 轴）", 4,
+                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5410", "雷赛智能 DMC5410（4 轴 PCI 脉冲卡）", 4,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "DMC5000 点位卡。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5810", "DMC5810（8 轴）", 8,
+                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5810", "雷赛智能 DMC5810（8 轴 PCI 脉冲卡）", 8,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "8 轴点位卡。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pci,
-                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5800", "DMC5800（8 轴，旧型号名）", 8,
+                "DMC5000", "DMC5000 脉冲卡（PCI）", "DMC5800", "雷赛智能 DMC5800（8 轴 PCI 脉冲卡，旧型号名）", 8,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "兼容旧档案里的 DMC5800 写法，按 8 轴 PCI 脉冲卡处理。未经真机验证。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "DMC5X10", "DMC5X10 脉冲卡（PCIe）", "DMC5X10-08", "DMC5X10-08（8 轴 PCIe 脉冲）", 8,
+                "DMC5X10", "DMC5X10 脉冲卡（PCIe）", "DMC5X10-08", "雷赛智能 DMC5X10-08（8 轴 PCIe 脉冲卡）", 8,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "PCIe 脉冲卡。不要和 DMC-E5000 EtherCAT 卡搞混。未经真机验证。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "DMC5X10", "DMC5X10 脉冲卡（PCIe）", "DMC5X10-16", "DMC5X10-16（16 轴 PCIe 脉冲）", 16,
+                "DMC5X10", "DMC5X10 脉冲卡（PCIe）", "DMC5X10-16", "雷赛智能 DMC5X10-16（16 轴 PCIe 脉冲卡）", 16,
                 DriverKind.LeadShineDmc, LtdmcDll, MotionAdapterStatus.ImplementedUnverified,
                 AccelParamKind.AccelerationTime, 1, false,
                 "16 轴 PCIe 脉冲。未经真机验证。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5016", "DMC-E5016（16 轴 EtherCAT）", 16,
+                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5016", "雷赛智能 DMC-E5016（16 轴 PCIe EtherCAT 总线卡）", 16,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "总线卡。轴在 EtherCAT 从站上，不能当 DMC5000 脉冲卡打开。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5032", "DMC-E5032（32 轴 EtherCAT）", 32,
+                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5032", "雷赛智能 DMC-E5032（32 轴 PCIe EtherCAT 总线卡）", 32,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "32 轴 EtherCAT 主站。未接入。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5064", "DMC-E5064（64 轴 EtherCAT）", 64,
+                "DMC-E5000", "DMC-E5000 EtherCAT 主站（PCIe）", "DMC-E5064", "雷赛智能 DMC-E5064（64 轴 PCIe EtherCAT 总线卡）", 64,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "64 轴 EtherCAT 主站。未接入。");
 
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Ethernet,
-                "EMC", "EMC EtherCAT 控制器（独立式）", "EMC-E0808", "EMC-E0808", 8,
+                "EMC", "EMC EtherCAT 控制器（独立式）", "EMC-E0808", "雷赛智能 EMC-E0808（8 轴以太网 EtherCAT 总线控制器）", 8,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "独立式总线控制器，以太网连接，不是 PCI 脉冲卡。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Ethernet,
-                "EMC", "EMC EtherCAT 控制器（独立式）", "EMC-E1616", "EMC-E1616", 16,
+                "EMC", "EMC EtherCAT 控制器（独立式）", "EMC-E1616", "雷赛智能 EMC-E1616（16 轴以太网 EtherCAT 总线控制器）", 16,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "16 轴独立式。未接入。");
             Add(list, MotionVendor.LeadShine, MotionCommandInterface.EtherCAT, MotionHostLink.Ethernet,
-                "PAC", "PAC EtherCAT 控制器（独立式）", "PAC-E0808", "PAC-E0808", 8,
+                "PAC", "PAC EtherCAT 控制器（独立式）", "PAC-E0808", "雷赛智能 PAC-E0808（8 轴以太网 EtherCAT 总线控制器）", 8,
                 DriverKind.LeadShineEtherCAT, LeadshineEcSdk, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "PAC 系列独立式总线控制器。未接入。");
 
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.Pulse, MotionHostLink.Ethernet,
-                "ZMC", "ZMC 脉冲控制器（以太网）", "ZMC406", "ZMC406（6 轴）", 6,
+                "ZMC", "ZMC 脉冲控制器（以太网）", "ZMC406", "正运动 ZMC406（6 轴以太网脉冲控制器）", 6,
                 DriverKind.ZmotionZmc, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "正运动网口脉冲控制器。仓库无适配器。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.Pulse, MotionHostLink.Ethernet,
-                "ZMC", "ZMC 脉冲控制器（以太网）", "ZMC432", "ZMC432（32 轴）", 32,
+                "ZMC", "ZMC 脉冲控制器（以太网）", "ZMC432", "正运动 ZMC432（32 轴以太网脉冲控制器）", 32,
                 DriverKind.ZmotionZmc, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "32 轴网口。未接入。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.Pulse, MotionHostLink.Ethernet,
-                "ECI", "ECI 脉冲控制器（以太网）", "ECI2418", "ECI2418", 4,
+                "ECI", "ECI 脉冲控制器（以太网）", "ECI2418", "正运动 ECI2418（4 轴以太网脉冲控制器）", 4,
                 DriverKind.ZmotionZmc, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "ECI 以太网脉冲。未接入。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.Pulse, MotionHostLink.Ethernet,
-                "ECI", "ECI 脉冲控制器（以太网）", "ECI2828", "ECI2828", 8,
+                "ECI", "ECI 脉冲控制器（以太网）", "ECI2828", "正运动 ECI2828（8 轴以太网脉冲控制器）", 8,
                 DriverKind.ZmotionZmc, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "ECI 8 轴。未接入。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.Pulse, MotionHostLink.Pcie,
-                "PCIE", "PCIE 脉冲卡", "PCIE1648", "PCIE1648", 16,
+                "PCIE", "PCIE 脉冲卡", "PCIE1648", "正运动 PCIE1648（16 轴 PCIe 脉冲卡）", 16,
                 DriverKind.ZmotionZmc, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "正运动 PCIe 脉冲卡。未接入。");
 
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.EtherCAT, MotionHostLink.Ethernet,
-                "ECI-E", "ECI EtherCAT 主站", "ECI2828E", "ECI2828E", 8,
+                "ECI-E", "ECI EtherCAT 主站", "ECI2828E", "正运动 ECI2828E（8 轴以太网 EtherCAT 总线控制器）", 8,
                 DriverKind.ZmotionEtherCAT, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "正运动 EtherCAT 主站，不是脉冲 ECI。未接入。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.EtherCAT, MotionHostLink.Pcie,
-                "PCIE-E", "PCIE EtherCAT 主站", "PCIE1648E", "PCIE1648E", 16,
+                "PCIE-E", "PCIE EtherCAT 主站", "PCIE1648E", "正运动 PCIE1648E（16 轴 PCIe EtherCAT 总线卡）", 16,
                 DriverKind.ZmotionEtherCAT, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "PCIe EtherCAT 主站。未接入。");
             Add(list, MotionVendor.Zmotion, MotionCommandInterface.EtherCAT, MotionHostLink.Ethernet,
-                "ZMC-E", "ZMC EtherCAT 主站", "ZMC432E", "ZMC432E", 32,
+                "ZMC-E", "ZMC EtherCAT 主站", "ZMC432E", "正运动 ZMC432E（32 轴以太网 EtherCAT 总线控制器）", 32,
                 DriverKind.ZmotionEtherCAT, ZmotionDll, MotionAdapterStatus.CatalogOnly,
                 AccelParamKind.AccelerationValue, 0, false,
                 "ZMC EtherCAT。未接入。");

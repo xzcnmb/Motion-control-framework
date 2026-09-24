@@ -220,13 +220,13 @@
                                       BorderThickness="1"
                                       BorderBrush="#E8E8E8">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="点位标识" Binding="{Binding Name}" Width="150" FontWeight="SemiBold" />
-                                    <DataGridTextColumn Header="当前实时工程量" Binding="{Binding Value, StringFormat='{}{0:F2}'}" Width="160" Foreground="#1677FF" FontSize="15" FontWeight="Bold" />
-                                    <DataGridTextColumn Header="物理单位" Binding="{Binding Unit}" Width="90" />
-                                    <DataGridTextColumn Header="Modbus区" Binding="{Binding Area}" Width="140" />
-                                    <DataGridTextColumn Header="0基址" Binding="{Binding Address}" Width="90" />
-                                    <DataGridTextColumn Header="数据类型" Binding="{Binding DataType}" Width="110" />
-                                    <DataGridCheckBoxColumn Header="允许写入" Binding="{Binding Writable}" Width="90" />
+                                    <DataGridTextColumn Header="点位标识" Binding="{Binding Name, Mode=OneWay}" Width="150" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="当前实时工程量" Binding="{Binding Value, Mode=OneWay, StringFormat='{}{0:F2}'}" Width="160" Foreground="#1677FF" FontSize="15" FontWeight="Bold" />
+                                    <DataGridTextColumn Header="物理单位" Binding="{Binding Unit, Mode=OneWay}" Width="90" />
+                                    <DataGridTextColumn Header="Modbus区" Binding="{Binding Area, Mode=OneWay}" Width="140" />
+                                    <DataGridTextColumn Header="0基址" Binding="{Binding Address, Mode=OneWay}" Width="90" />
+                                    <DataGridTextColumn Header="数据类型" Binding="{Binding DataType, Mode=OneWay}" Width="110" />
+                                    <DataGridCheckBoxColumn Header="允许写入" Binding="{Binding Writable, Mode=OneWay}" Width="90" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>

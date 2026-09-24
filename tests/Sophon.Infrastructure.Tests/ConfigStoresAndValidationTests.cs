@@ -742,6 +742,94 @@ namespace Sophon.Infrastructure.Tests
             Assert.Equal("气压低报警", repository.RegisteredAlarms[1].Content);
         }
 
+        [Fact]
+        public void MotionCardCatalog_DisplayNames_Use_Vendor_Model_Axes_And_Category()
+        {
+            // 目录每项显示名都要能单独读出来历：中文厂商 + 型号 + 轴数 + 中文卡型/控制器类别 + 主机接口
+            Assert.NotEmpty(MotionCardCatalog.Models);
+            foreach (var model in MotionCardCatalog.Models)
+            {
+                string category = model.CommandInterface switch
+                {
+                    MotionCommandInterface.Pulse => "脉冲",
+                    MotionCommandInterface.Analog => "模拟量",
+                    MotionCommandInterface.EtherCAT => "总线",
+                    MotionCommandInterface.GLink => "总线",
+                    _ => model.CommandInterface.ToString(),
+                };
+
+                Assert.Contains(MotionCardCatalog.Display(model.Vendor), model.DisplayName, StringComparison.Ordinal);
+                Assert.Contains(model.Model, model.DisplayName, StringComparison.Ordinal);
+                Assert.Contains($"{model.MaxAxes} 轴", model.DisplayName, StringComparison.Ordinal);
+                Assert.Contains(category, model.DisplayName, StringComparison.Ordinal);
+                Assert.Contains(MotionCardCatalog.Display(model.HostLink), model.DisplayName, StringComparison.Ordinal);
+            }
+        }
+
+        [Fact]
+        public void MotionCardCatalog_DisplayNameRename_Keeps_ModelKeys_And_Drivers()
+        {
+            // 只改显示名：型号匹配键、驱动、厂商、系列、平台配置都不动
+            var gts = MotionCardCatalog.Find("GTS-400");
+            var dmc = MotionCardCatalog.Find("DMC5810");
+            var dmc5800 = MotionCardCatalog.Find("DMC5800");
+            var bus = MotionCardCatalog.Find("DMC-E5032");
+            var emc = MotionCardCatalog.Find("EMC-E0808");
+            var eci = MotionCardCatalog.Find("ECI2418");
+            Assert.NotNull(gts);
+            Assert.NotNull(dmc);
+            Assert.NotNull(dmc5800);
+            Assert.NotNull(bus);
+            Assert.NotNull(emc);
+            Assert.NotNull(eci);
+
+            Assert.Equal(DriverKind.GoogolGts, gts!.Driver);
+            Assert.Equal(DriverKind.LeadShineDmc, dmc!.Driver);
+            Assert.Equal(DriverKind.LeadShineDmc, dmc5800!.Driver);
+            Assert.Equal(DriverKind.LeadShineEtherCAT, bus!.Driver);
+            Assert.Equal(DriverKind.LeadShineEtherCAT, emc!.Driver);
+            Assert.Equal(DriverKind.ZmotionZmc, eci!.Driver);
+
+            // EMC / PAC 属于雷赛，不因改名变成正运动；旧型号名保留
+            Assert.Equal(MotionVendor.LeadShine, emc!.Vendor);
+            Assert.Contains("旧型号名", dmc5800!.DisplayName, StringComparison.Ordinal);
+
+            // 代表脉冲卡：Find + ApplyModel 仍按原键 / 原驱动 / 原平台写入档案
+            var pulse = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            pulse.ApplyModel(gts!);
+            Assert.Equal("GTS-400", pulse.CardModel);
+            Assert.Equal(DriverKind.GoogolGts, pulse.Driver);
+            Assert.Equal(MotionVendor.Googol, pulse.Vendor);
+            Assert.Equal(MotionCommandInterface.Pulse, pulse.CommandInterface);
+            Assert.Equal("GTS", pulse.Series);
+            Assert.Equal("gts.dll", gts!.NativeLibrary);
+            Assert.True(pulse.Platform.RequiresConfigFile);
+            Assert.Equal(1, pulse.Platform.AxisIndexBase);
+
+            // 代表总线卡：仍按原键解析，且不与脉冲卡共用 LTDMC.dll
+            var busProfile = new MotionCardProfile
+            {
+                Axes = new List<AxisDefinition>
+                {
+                    new() { AxisId = 0, Name = "X", PulsePerUnit = 1000, MaxSpeed = 100, MaxAccel = 500, MaxDecel = 500 }
+                }
+            };
+            busProfile.ApplyModel(bus!);
+            Assert.Equal("DMC-E5032", busProfile.CardModel);
+            Assert.Equal(DriverKind.LeadShineEtherCAT, busProfile.Driver);
+            Assert.Equal(MotionVendor.LeadShine, busProfile.Vendor);
+            Assert.Equal(MotionCommandInterface.EtherCAT, busProfile.CommandInterface);
+            Assert.Equal("DMC-E5000", busProfile.Series);
+            Assert.Equal(AccelParamKind.AccelerationValue, busProfile.Platform.Accel);
+            Assert.DoesNotContain("LTDMC.dll", bus!.NativeLibrary, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static AlarmRepository CreateAlarmRepository(IConfigManager configManager)
         {
             return new AlarmRepository(

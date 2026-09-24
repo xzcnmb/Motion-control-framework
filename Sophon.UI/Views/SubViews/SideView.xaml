@@ -11,6 +11,55 @@
     prism:ViewModelLocator.AutoWireViewModel="True"
     mc:Ignorable="d">
 
+    <!-- 菜单图标全部用原生 WPF 线性矢量图：Geometry 画在 24x24 设计坐标，Path 按一级 18 / 二级 16 等比缩放，
+         统一 1.6 线宽、圆角端点与拐角。不用字体图标，避免不同机器字体差异；不引入新资源文件或外部依赖。
+         Stroke 绑定最近的 hc:SideMenuItem.Foreground，图标颜色跟随菜单项文字（正常 / 悬停 / 选中一致变化）。
+         图标语义与 hc:SideMenuItem.Icon 一一对应，改动时保持同一句式追加。 -->
+    <UserControl.Resources>
+        <Geometry x:Key="SideNavIconHome">M3.5 10.5 L12 3.5 L20.5 10.5 M6 9.2 V20.2 H18 V9.2 M10 20.2 V15 H14 V20.2</Geometry>
+        <Geometry x:Key="SideNavIconChip">M7 7 H17 V17 H7 Z M10 10 H14 V14 H10 Z M3.5 9.5 H7 M3.5 12 H7 M3.5 14.5 H7 M17 9.5 H20.5 M17 12 H20.5 M17 14.5 H20.5 M9.5 3.5 V7 M12 3.5 V7 M14.5 3.5 V7 M9.5 17 V20.5 M12 17 V20.5 M14.5 17 V20.5</Geometry>
+        <Geometry x:Key="SideNavIconMove">M12 3 V21 M3 12 H21 M9.6 5.6 L12 3 L14.4 5.6 M9.6 18.4 L12 21 L14.4 18.4 M5.6 9.6 L3 12 L5.6 14.4 M18.4 9.6 L21 12 L18.4 14.4</Geometry>
+        <Geometry x:Key="SideNavIconTarget">M12 3 A9 9 0 1 1 12 21 A9 9 0 1 1 12 3 Z M12 8.5 A3.5 3.5 0 1 1 12 15.5 A3.5 3.5 0 1 1 12 8.5 Z M12 1 V2.6 M12 21.4 V23 M1 12 H2.6 M21.4 12 H23</Geometry>
+        <Geometry x:Key="SideNavIconFlow">M4 4 H10 V10 H4 Z M14 14 H20 V20 H14 Z M10 7 H14 V14</Geometry>
+        <Geometry x:Key="SideNavIconFactory">M4 21 V10 L9.5 13 V10 L15 13 V10 L20 13 V21 Z M10.5 21 V17 H13.5 V21</Geometry>
+        <Geometry x:Key="SideNavIconPlug">M9 8 H16 V16 H9 Z M6.5 10 H9 M6.5 14 H9 M16 12 H20</Geometry>
+        <Geometry x:Key="SideNavIconCylinder">M5 9 H15 V15 H5 Z M13 9 V15 M15 12 H20 M19 10.5 V13.5</Geometry>
+        <Geometry x:Key="SideNavIconIoSignal">M3 9.5 V14.5 M21 9.5 V14.5 M3 12 H7 L9.5 7.5 L13 16.5 L15.5 12 H21</Geometry>
+        <Geometry x:Key="SideNavIconEye">M2 12 C4.6 6.8 7.9 4.8 12 4.8 C16.1 4.8 19.4 6.8 22 12 C19.4 17.2 16.1 19.2 12 19.2 C7.9 19.2 4.6 17.2 2 12 Z M12 8.2 A3.8 3.8 0 1 1 12 15.8 A3.8 3.8 0 1 1 12 8.2 Z</Geometry>
+        <Geometry x:Key="SideNavIconCamera">M3 7.5 H7 L9 5 H15 L17 7.5 H21 V18.5 H3 Z M12 8.6 A3.4 3.4 0 1 1 12 15.4 A3.4 3.4 0 1 1 12 8.6 Z</Geometry>
+        <Geometry x:Key="SideNavIconMonitorEye">M3 5 H21 V15 H3 Z M12 15 V19 M8 19 H16 M5.5 9.5 C7 8 9.2 7.4 12 7.4 C14.8 7.4 17 8 18.5 9.5 C17 11 14.8 11.6 12 11.6 C9.2 11.6 7 11 5.5 9.5 Z</Geometry>
+        <Geometry x:Key="SideNavIconGridCross">M4 4 H20 V20 H4 Z M4 12 H20 M12 4 V20 M12 10.8 V13.2 M10.8 12 H13.2</Geometry>
+        <Geometry x:Key="SideNavIconBell">M12 3.5 A6.5 6.5 0 0 1 18.5 10 V16.5 H5.5 V10 A6.5 6.5 0 0 1 12 3.5 Z M10.2 19.2 A2 2 0 0 1 13.8 19.2</Geometry>
+        <Geometry x:Key="SideNavIconWarning">M12 4 L21 19.5 H3 Z M12 9.5 V14 M12 16.9 V17.1</Geometry>
+        <Geometry x:Key="SideNavIconLimit">M5 8 V16 M19 8 V16 M5 12 H19 M10 9.5 H14 V14.5 H10 Z</Geometry>
+        <Geometry x:Key="SideNavIconDocPlus">M6 3 H14 L18 7 V21 H6 Z M14 3 V7 H18 M12 11 V17 M9 14 H15</Geometry>
+        <Geometry x:Key="SideNavIconClock">M12 3.6 A8.4 8.4 0 1 1 12 20.4 A8.4 8.4 0 1 1 12 3.6 Z M12 7.5 V12 L15.5 14</Geometry>
+        <Geometry x:Key="SideNavIconSliders">M4 6.5 H20 M16 4 V9 M4 12 H20 M8 9.5 V14.5 M4 17.5 H20 M13 15 V20</Geometry>
+        <Geometry x:Key="SideNavIconUser">M12 4 A3.4 3.4 0 1 1 12 10.8 A3.4 3.4 0 1 1 12 4 Z M5 20 A7 7 0 0 1 19 20</Geometry>
+
+        <Style x:Key="SideNavIconPathStyle" TargetType="Path">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=hc:SideMenuItem}}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Setter Property="Fill" Value="{x:Null}" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SideNavIconLevel1Style" BasedOn="{StaticResource SideNavIconPathStyle}" TargetType="Path">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+        </Style>
+
+        <Style x:Key="SideNavIconLevel2Style" BasedOn="{StaticResource SideNavIconPathStyle}" TargetType="Path">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+        </Style>
+    </UserControl.Resources>
+
     <Grid Background="#FFFFFF">
         <Grid.RowDefinitions>
             <RowDefinition Height="65" />
@@ -70,18 +119,18 @@
                     CommandParameter="HomeView"
                     Header="系统主页">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Home.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconHome}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
                 <!-- 板卡与轴配置：按「厂商 → 接口类型 → 系列 → 型号」选型。
-                     用芯片图标（IO.png）对应「控制板卡」，电机轴图标留给「轴调试」。 -->
+                     用芯片图标对应「控制板卡」，坐标轴图标留给「轴调试」。 -->
                 <hc:SideMenuItem
                     Command="{Binding NavigateCommand}"
                     CommandParameter="MotionCardConfigView"
                     Header="板卡与轴配置">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconChip}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -91,7 +140,7 @@
                     CommandParameter="AxisDebugView"
                     Header="轴调试">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Axis.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconMove}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -101,7 +150,7 @@
                     CommandParameter="TeachView"
                     Header="点位示教">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Param.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconTarget}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -111,7 +160,7 @@
                     CommandParameter="FlowEditorView"
                     Header="流程编辑">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Station.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconFlow}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -121,17 +170,17 @@
                     CommandParameter="StationView"
                     Header="工站运行">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Station.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconFactory}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
-                <!-- 气动与外设：485 走串口通信，用网络拓扑图标（Protocol.png） -->
+                <!-- 气动与外设：485 走串口通信，用连接器/插头图标 -->
                 <hc:SideMenuItem
                     Command="{Binding NavigateCommand}"
                     CommandParameter="DeviceControlView"
                     Header="气动与485外设">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Protocol.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconPlug}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -140,7 +189,7 @@
                     CommandParameter="ProtocolInfrastructureView"
                     Header="外设与气缸配置">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconCylinder}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -150,22 +199,21 @@
                     CommandParameter="IOInfrastructureView"
                     Header="IO映射与监控">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/IO.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconIoSignal}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
-                <!-- 机器视觉。现有 Resources 里没有相机/镜头图标，父项沿用最接近的文档类图标 Register.png；
-                     子项按语义分别用采集卡（IO）、监视记录（History）、标定参数（Param）。 -->
+                <!-- 机器视觉：父项用眼睛图标，子项按语义分别用相机轮廓、显示器内视线、网格十字 -->
                 <hc:SideMenuItem Header="机器视觉">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Register.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconEye}" />
                     </hc:SideMenuItem.Icon>
                     <hc:SideMenuItem
                         Command="{Binding NavigateCommand}"
                         CommandParameter="CameraConfigView"
                         Header="相机配置">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/IO.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconCamera}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                     <hc:SideMenuItem
@@ -173,7 +221,7 @@
                         CommandParameter="VisionMonitorView"
                         Header="视觉监视">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/History.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconMonitorEye}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                     <hc:SideMenuItem
@@ -181,7 +229,7 @@
                         CommandParameter="VisionCalibrationView"
                         Header="标定向导">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/Param.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconGridCross}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                 </hc:SideMenuItem>
@@ -189,14 +237,14 @@
                 <!-- 报警管理 -->
                 <hc:SideMenuItem Header="报警管理">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Alarm.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconBell}" />
                     </hc:SideMenuItem.Icon>
                     <hc:SideMenuItem
                         Command="{Binding NavigateCommand}"
                         CommandParameter="AlarmCenterView"
                         Header="实时报警">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/Alarm.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconWarning}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                     <hc:SideMenuItem
@@ -204,7 +252,7 @@
                         CommandParameter="LimitMonitorView"
                         Header="限位监控">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/Axis.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconLimit}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                     <hc:SideMenuItem
@@ -212,7 +260,7 @@
                         CommandParameter="AlarmRegisterView"
                         Header="报警注册">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/Register.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconDocPlus}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                     <hc:SideMenuItem
@@ -220,18 +268,18 @@
                         CommandParameter="AlarmHistoryView"
                         Header="历史报警">
                         <hc:SideMenuItem.Icon>
-                            <Image Width="16" Height="16" Source="/Resources/History.png" />
+                            <Path Style="{StaticResource SideNavIconLevel2Style}" Data="{StaticResource SideNavIconClock}" />
                         </hc:SideMenuItem.Icon>
                     </hc:SideMenuItem>
                 </hc:SideMenuItem>
 
-                <!-- 参数设置：齿轮图标（Infra.png）= 设置项 -->
+                <!-- 参数设置：调节滑杆图标 = 设置项 -->
                 <hc:SideMenuItem
                     Command="{Binding NavigateCommand}"
                     CommandParameter="ParamView"
                     Header="参数设置">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/Infra.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconSliders}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
 
@@ -241,7 +289,7 @@
                     CommandParameter="UserView"
                     Header="用户管理">
                     <hc:SideMenuItem.Icon>
-                        <Image Width="18" Height="18" Source="/Resources/User.png" />
+                        <Path Style="{StaticResource SideNavIconLevel1Style}" Data="{StaticResource SideNavIconUser}" />
                     </hc:SideMenuItem.Icon>
                 </hc:SideMenuItem>
             </hc:SideMenu>
